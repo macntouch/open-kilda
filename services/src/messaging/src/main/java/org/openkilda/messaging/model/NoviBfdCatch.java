@@ -15,6 +15,8 @@
 
 package org.openkilda.messaging.model;
 
+import org.openkilda.model.SwitchId;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
@@ -29,12 +31,13 @@ public class NoviBfdCatch extends NoviBfdEndpoint {
     @JsonCreator
     @Builder(toBuilder = true)
     public NoviBfdCatch(
+            @JsonProperty("switch-id") SwitchId switchId,
             @JsonProperty("target") Switch target,
             @JsonProperty("remote") Switch remote,
             @JsonProperty("physical-port-number") int physicalPortNumber,
             @JsonProperty("udp-port-number") int udpPortNumber,
             @JsonProperty("discriminator") int discriminator) {
-        super(target, remote, physicalPortNumber, udpPortNumber, discriminator);
+        super(switchId, target, remote, physicalPortNumber, udpPortNumber, discriminator);
     }
 
     public enum Errors {

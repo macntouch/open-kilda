@@ -15,6 +15,8 @@
 
 package org.openkilda.messaging.model;
 
+import org.openkilda.model.SwitchId;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
@@ -38,13 +40,18 @@ public abstract class NoviBfdEndpoint implements Serializable {
     @JsonProperty("discriminator")
     protected final int discriminator;
 
+    @JsonProperty("switch-id")
+    protected final SwitchId switchId;
+
     @JsonCreator
     protected NoviBfdEndpoint(
+            @JsonProperty("switch-id") SwitchId switchId,
             @JsonProperty("target") Switch target,
             @JsonProperty("remote") Switch remote,
             @JsonProperty("physical-port-number") int physicalPortNumber,
             @JsonProperty("udp-port-number") int udpPortNumber,
             @JsonProperty("discriminator") int discriminator) {
+        this.switchId = switchId;
         this.target = target;
         this.remote = remote;
         this.physicalPortNumber = physicalPortNumber;

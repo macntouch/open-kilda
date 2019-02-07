@@ -394,7 +394,7 @@ public interface OutputCommands {
      */
     default OFFlowAdd installBfdCatchRule(DatapathId dpid) {
         Match match = ofFactory.buildMatch()
-                .setExact(MatchField.ETH_DST, MacAddress.of(dpid))
+                // .setExact(MatchField.ETH_DST, MacAddress.of(dpid))
                 .setExact(MatchField.ETH_TYPE, EthType.IPv4)
                 .setExact(MatchField.IP_PROTO, IpProtocol.UDP)
                 .setExact(MatchField.UDP_DST, TransportPort.of(BDF_DEFAULT_PORT))

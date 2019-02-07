@@ -868,7 +868,7 @@ public class SwitchManager implements IFloodlightModule, IFloodlightService, ISw
 
     private Match catchRuleMatch(DatapathId dpid, OFFactory ofFactory) {
         return ofFactory.buildMatch()
-            .setExact(MatchField.ETH_DST, dpIdToMac(dpid))
+            //  .setExact(MatchField.ETH_DST, dpIdToMac(dpid))
             .setExact(MatchField.ETH_TYPE, EthType.IPv4)
             .setExact(MatchField.IP_PROTO, IpProtocol.UDP)
             .setExact(MatchField.UDP_DST, TransportPort.of(BDF_DEFAULT_PORT))

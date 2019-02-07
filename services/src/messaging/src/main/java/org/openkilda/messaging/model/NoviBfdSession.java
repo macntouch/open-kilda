@@ -15,6 +15,8 @@
 
 package org.openkilda.messaging.model;
 
+import org.openkilda.model.SwitchId;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
@@ -41,6 +43,7 @@ public class NoviBfdSession extends NoviBfdEndpoint {
     @JsonCreator
     @Builder(toBuilder = true)
     public NoviBfdSession(
+            @JsonProperty("switch-id") SwitchId switchId,
             @JsonProperty("target") Switch target,
             @JsonProperty("remote") Switch remote,
             @JsonProperty("physical-port-number") int physicalPortNumber,
@@ -50,7 +53,7 @@ public class NoviBfdSession extends NoviBfdEndpoint {
             @JsonProperty("interval-ms") int intervalMs,
             @JsonProperty("multiplier") short multiplier,
             @JsonProperty("keep-over-disconnect") boolean keepOverDisconnect) {
-        super(target, remote, physicalPortNumber, udpPortNumber, discriminator);
+        super(switchId, target, remote, physicalPortNumber, udpPortNumber, discriminator);
         this.logicalPortNumber = logicalPortNumber;
         this.intervalMs = intervalMs;
         this.multiplier = multiplier;

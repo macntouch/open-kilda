@@ -29,6 +29,7 @@ import java.net.UnknownHostException;
 public abstract class BfdSessionAbstractTest extends JsonSerializeAbstractTest {
     protected NoviBfdSession makeBfdSession() throws UnknownHostException {
         return new NoviBfdSession(
+                new SwitchId("ff:fe:00:00:00:00:01:01"),
                 new Switch(
                         new SwitchId("ff:fe:00:00:00:00:00:01"),
                         Inet4Address.getByName("127.0.2.1"),

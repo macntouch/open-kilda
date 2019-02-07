@@ -80,7 +80,7 @@ public class EnableBfdResource extends ServerResource {
                         "Invalid bfd session interval value: %d < %d",
                         request.getIntervalMs(), CONSTRAINT_INTERVAL_MIN));
             }
-            DatapathId datapathIdtarget = DatapathId.of(request.getTarget().getDatapath().toLong());
+            DatapathId datapathIdtarget = DatapathId.of(request.getSwitchId().toLong());
 
             IOFSwitch iofSwitch = switchManager.lookupSwitch(datapathIdtarget);
             OFPacketOut outPacket = makeSessionConfigMessage(request, iofSwitch, switchManager);
