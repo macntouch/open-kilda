@@ -41,6 +41,21 @@ public class FlowPair implements Serializable {
         reverse.setStatus(status);
     }
 
+    public void setGroupId(String groupId) {
+        forward.setGroupId(groupId);
+        reverse.setGroupId(groupId);
+    }
+
+    public void setPrimaryPathId(String pathId) {
+        forward.setPrimaryPathId(pathId);
+        reverse.setPrimaryPathId(pathId);
+    }
+
+    public void setProtectedPathId(String pathId) {
+        forward.setProtectedPathId(pathId);
+        reverse.setProtectedPathId(pathId);
+    }
+
     public void setTimeCreate(Instant timeCreate) {
         forward.setTimeCreate(timeCreate);
         reverse.setTimeCreate(timeCreate);

@@ -1,4 +1,4 @@
-/* Copyright 2017 Telstra Open Source
+/* Copyright 2019 Telstra Open Source
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
  *   you may not use this file except in compliance with the License.
@@ -13,27 +13,33 @@
  *   limitations under the License.
  */
 
-package org.openkilda.messaging.nbtopology.response;
+package org.openkilda.messaging.command.flow;
 
-import org.openkilda.messaging.info.InfoData;
-import org.openkilda.messaging.model.FlowPathDto;
+import org.openkilda.messaging.command.CommandData;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.EqualsAndHashCode;
+import lombok.NonNull;
 import lombok.Value;
 
-/**
- * Represents a flow path northbound response.
- */
 @Value
-public class GetFlowPathResponse extends InfoData {
+@EqualsAndHashCode(callSuper = false)
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class FlowPathSwapRequest extends CommandData {
     private static final long serialVersionUID = 1L;
 
-    @JsonProperty("payload")
-    protected FlowPathDto payload;
+    @JsonProperty("flow_id")
+    protected String flowId;
+
+    @JsonProperty("path_id")
+    protected String pathId;
 
     @JsonCreator
-    public GetFlowPathResponse(@JsonProperty("payload") FlowPathDto payload) {
-        this.payload = payload;
+    public FlowPathSwapRequest(@NonNull @JsonProperty("flow_id") String flowId,
+                               @JsonProperty("path_id") String pathId) {
+        this.flowId = flowId;
+        this.pathId = pathId;
     }
 }

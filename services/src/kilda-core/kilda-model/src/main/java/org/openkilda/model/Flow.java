@@ -69,6 +69,10 @@ public class Flow implements Serializable {
     @Required
     private long cookie;
 
+    @Property(name = "protected_cookie")
+    @Required
+    private long protectedCookie;
+
     @NonNull
     @StartNode
     private Switch srcSwitch;
@@ -154,6 +158,15 @@ public class Flow implements Serializable {
     @Property(name = "periodic_pings")
     private boolean periodicPings;
 
+    @Property(name = "allocate_protected_path")
+    private boolean allocateProtectedPath;
+
+    @Property(name = "primary_path_id")
+    private String primaryPathId;
+
+    @Property(name = "protected_path_id")
+    private String protectedPathId;
+
     @Property(name = "status")
     // Enforce usage of custom converters.
     @Convert(graphPropertyType = String.class)
@@ -177,13 +190,15 @@ public class Flow implements Serializable {
      * Constructor used by the builder only and needed to copy srcSwitch to srcSwitchId, destSwitch to destSwitchId.
      */
     @Builder(toBuilder = true)
-    Flow(String flowId, long cookie, //NOSONAR
+    Flow(String flowId, long cookie, long protectedCookie, //NOSONAR
             Switch srcSwitch, Switch destSwitch, int srcPort, int srcVlan, int destPort, int destVlan,
-            FlowPath flowPath, long bandwidth, String description, int transitVlan,
-            Integer meterId, String groupId, boolean ignoreBandwidth, boolean periodicPings,
-            FlowStatus status, Integer maxLatency, Integer priority, Instant timeCreate, Instant timeModify) {
+            FlowPath flowPath, long bandwidth, String description, int transitVlan, Integer meterId, String groupId,
+            boolean ignoreBandwidth, boolean periodicPings, boolean allocateProtectedPath,
+            String primaryPathId, String protectedPathId, FlowStatus status, Integer maxLatency, Integer priority,
+            Instant timeCreate, Instant timeModify) {
         this.flowId = flowId;
         this.cookie = cookie;
+        this.protectedCookie = protectedCookie;
         setSrcSwitch(srcSwitch);
         setDestSwitch(destSwitch);
         this.srcPort = srcPort;
@@ -198,6 +213,9 @@ public class Flow implements Serializable {
         this.groupId = groupId;
         this.ignoreBandwidth = ignoreBandwidth;
         this.periodicPings = periodicPings;
+        this.allocateProtectedPath = allocateProtectedPath;
+        this.primaryPathId = primaryPathId;
+        this.protectedPathId = protectedPathId;
         this.status = status;
         this.maxLatency = maxLatency;
         this.priority = priority;

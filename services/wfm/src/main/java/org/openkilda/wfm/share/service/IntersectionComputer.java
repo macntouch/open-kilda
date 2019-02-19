@@ -32,60 +32,61 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Computes intersection counters for flow group.
+ * Computes intersection counters for flow paths in flow group.
  */
 public class IntersectionComputer {
-    private Set<Edge> mainFlowEdges;
-    private Set<SwitchId> mainFlowSwitches;
+    private Set<Edge> targetPathEdges;
+    private Set<SwitchId> targetPathSwitches;
 
-    // FlowId, List<Edge>
-    private Map<String, List<Edge>> otherEdges;
+    // PathId, Set<Edge>
+    private Map<String, Set<Edge>> otherEdges;
 
     /**
-     * Construct intersection counter for current flow group and target flow.
+     * Construct intersection counter for current flow group and target flow and flow path.
      *
-     * @param mainFlowId the flow id to find overlapping with.
-     * @param segments flow segments in group.
+     * @param targetFlowId the flow id to filter other paths belongs to target flow.
+     * @param targetPathId the path id to find overlapping with.
+     * @param segments flow segments in the flow group.
      */
-    public IntersectionComputer(String mainFlowId, Collection<FlowSegment> segments) {
-        List<Edge> mainFlow = segments.stream()
-                .filter(e -> e.getFlowId().equals(mainFlowId))
+    public IntersectionComputer(String targetFlowId, String targetPathId, Collection<FlowSegment> segments) {
+        List<Edge> targetPath = segments.stream()
+                .filter(e -> e.getPathId().equals(targetPathId))
                 .map(Edge::fromFlowSegment)
                 .collect(Collectors.toList());
 
-        mainFlowEdges = new HashSet<>(mainFlow);
-        mainFlowSwitches = mainFlow.stream()
+        targetPathEdges = new HashSet<>(targetPath);
+        targetPathSwitches = targetPath.stream()
                 .flatMap(e -> Stream.of(e.getSrcSwitch(), e.getDestSwitch()))
                 .collect(Collectors.toSet());
 
         otherEdges = segments.stream()
-                .filter(e -> !e.getFlowId().equals(mainFlowId))
+                .filter(e -> !e.getFlowId().equals(targetFlowId))
                 .collect(Collectors.groupingBy(
-                        FlowSegment::getFlowId,
-                        Collectors.mapping(Edge::fromFlowSegment, Collectors.toList())
+                        FlowSegment::getPathId,
+                        Collectors.mapping(Edge::fromFlowSegment, Collectors.toSet())
                 ));
     }
 
     /**
-     * Returns {@link OverlappingSegmentsStats} with all other paths in group.
+     * Returns {@link OverlappingSegmentsStats} between target path id and other flow paths in the group.
      *
      * @return {@link OverlappingSegmentsStats} instance.
      */
     public OverlappingSegmentsStats getOverlappingStats() {
         return computeIntersectionCounters(
-                otherEdges.values().stream().flatMap(Collection::stream).collect(Collectors.toList()));
+                otherEdges.values().stream().flatMap(Collection::stream).collect(Collectors.toSet()));
     }
 
     /**
-     * Returns {@link OverlappingSegmentsStats} with {@param flowId} flow path.
+     * Returns {@link OverlappingSegmentsStats} with {@param pathId} flow path.
      *
      * @return {@link OverlappingSegmentsStats} instance.
      */
-    public OverlappingSegmentsStats getOverlappingStats(String flowId) {
-        return computeIntersectionCounters(otherEdges.getOrDefault(flowId, Collections.emptyList()));
+    public OverlappingSegmentsStats getOverlappingStats(String pathId) {
+        return computeIntersectionCounters(otherEdges.getOrDefault(pathId, Collections.emptySet()));
     }
 
-    OverlappingSegmentsStats computeIntersectionCounters(List<Edge> otherEdges) {
+    OverlappingSegmentsStats computeIntersectionCounters(Set<Edge> otherEdges) {
         Set<SwitchId> switches = new HashSet<>();
         Set<Edge> edges = new HashSet<>();
         for (Edge edge : otherEdges) {
@@ -94,16 +95,32 @@ public class IntersectionComputer {
             edges.add(edge);
         }
 
-        int edgesOverlap = Sets.intersection(edges, mainFlowEdges).size();
-        int switchesOverlap = Sets.intersection(switches, mainFlowSwitches).size();
+        int edgesOverlap = Sets.intersection(edges, targetPathEdges).size();
+        int switchesOverlap = Sets.intersection(switches, targetPathSwitches).size();
         return new OverlappingSegmentsStats(edgesOverlap,
                 switchesOverlap,
-                percent(edgesOverlap, mainFlowEdges.size()),
-                percent(switchesOverlap, mainFlowSwitches.size()));
+                percent(edgesOverlap, targetPathEdges.size()),
+                percent(switchesOverlap, targetPathSwitches.size()));
     }
 
     private int percent(int n, int from) {
         return (int) ((n * 100.0f) / from);
+    }
+
+    /**
+     * Calculates is overlapping between primary and protected flow segments exists.
+     *
+     * @param primaryFlowSegments primary flow segments.
+     * @param protectedFlowSegments protected flow segments.
+     * @return is overlapping flag.
+     */
+    public static boolean isProtectedPathOverlaps(
+            List<FlowSegment> primaryFlowSegments, List<FlowSegment> protectedFlowSegments) {
+        Set<Edge> primaryEdges = primaryFlowSegments.stream().map(Edge::fromFlowSegment).collect(Collectors.toSet());
+        Set<Edge> protectedEdges = protectedFlowSegments.stream().map(Edge::fromFlowSegment)
+                .collect(Collectors.toSet());
+
+        return !Sets.intersection(primaryEdges, protectedEdges).isEmpty();
     }
 
     /**

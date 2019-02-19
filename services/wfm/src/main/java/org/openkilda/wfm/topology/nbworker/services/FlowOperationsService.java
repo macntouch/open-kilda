@@ -15,11 +15,16 @@
 
 package org.openkilda.wfm.topology.nbworker.services;
 
-import org.openkilda.messaging.payload.flow.GroupFlowPathPayload;
+import static java.util.Collections.emptyList;
+import static org.apache.commons.collections4.ListUtils.union;
+
+import org.openkilda.messaging.model.FlowPathDto;
+import org.openkilda.messaging.model.FlowPathDto.FlowPathDtoBuilder;
+import org.openkilda.messaging.model.FlowPathDto.FlowProtectedPathDto;
 import org.openkilda.messaging.payload.flow.PathNodePayload;
 import org.openkilda.model.Flow;
 import org.openkilda.model.FlowPair;
-import org.openkilda.model.FlowPath;
+import org.openkilda.model.FlowSegment;
 import org.openkilda.model.SwitchId;
 import org.openkilda.persistence.TransactionManager;
 import org.openkilda.persistence.repositories.FlowRepository;
@@ -30,12 +35,16 @@ import org.openkilda.wfm.error.FlowNotFoundException;
 import org.openkilda.wfm.error.IslNotFoundException;
 import org.openkilda.wfm.share.service.IntersectionComputer;
 
+import com.google.common.base.MoreObjects;
+import com.google.common.collect.Lists;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -91,62 +100,136 @@ public class FlowOperationsService {
      *
      * @param flowId the flow to get a path.
      */
-    public List<GroupFlowPathPayload> getFlowPath(String flowId) throws FlowNotFoundException {
+    public List<FlowPathDto> getFlowPath(String flowId) throws FlowNotFoundException {
         FlowPair currentFlow = flowRepository.findFlowPairById(flowId)
                 .orElseThrow(() -> new FlowNotFoundException(flowId));
+        Flow forwardFlow = currentFlow.getForward();
 
-        String groupId = currentFlow.getForward().getGroupId();
+        String groupId = forwardFlow.getGroupId();
         if (groupId == null) {
+            Map<Long, List<FlowSegment>> segmentsByCookie = flowSegmentRepository.findByFlowId(flowId).stream()
+                    .collect(Collectors.groupingBy(FlowSegment::getCookie, Collectors.toList()));
+
             return Collections.singletonList(
-                    toGroupFlowPathPayloadBuilder(currentFlow).build());
+                    toFlowPathDtoBuilder(currentFlow, segmentsByCookie)
+                            .build());
         } else {
             Collection<FlowPair> flowPairsInGroup = flowRepository.findFlowPairsByGroupId(groupId);
-            IntersectionComputer intersectionComputer =
-                    new IntersectionComputer(flowId, flowSegmentRepository.findByFlowGroupId(groupId));
+            Collection<FlowSegment> flowSegmentsInGroup = flowSegmentRepository.findByFlowGroupId(groupId);
 
-            // other flows in group
-            List<GroupFlowPathPayload> payloads = flowPairsInGroup.stream()
+            Map<Long, List<FlowSegment>> segmentsByCookie = flowSegmentsInGroup.stream()
+                    .collect(Collectors.groupingBy(FlowSegment::getCookie, Collectors.toList()));
+
+            IntersectionComputer primaryIntersectionComputer = new IntersectionComputer(
+                    forwardFlow.getFlowId(), forwardFlow.getPrimaryPathId(), flowSegmentsInGroup);
+
+            // target flow primary path
+            FlowPathDtoBuilder targetFlowDtoBuilder = this.toFlowPathDtoBuilder(currentFlow, segmentsByCookie)
+                    .segmentsStats(primaryIntersectionComputer.getOverlappingStats());
+
+            // other flows in the the group
+            List<FlowPathDto> payloads = flowPairsInGroup.stream()
                     .filter(e -> !e.getForward().getFlowId().equals(flowId))
-                    .map(e -> this.toGroupFlowPathPayloadBuilder(e)
-                            .segmentsStats(intersectionComputer.getOverlappingStats(e.getForward().getFlowId()))
-                            .build())
+                    .map(e -> this.mapGroupPathFlowDto(e, true, primaryIntersectionComputer, segmentsByCookie))
                     .collect(Collectors.toList());
-            // current flow
-            payloads.add(this.toGroupFlowPathPayloadBuilder(currentFlow)
-                    .segmentsStats(intersectionComputer.getOverlappingStats())
-                    .build());
+
+            if (forwardFlow.isAllocateProtectedPath()) {
+                IntersectionComputer protectedIntersectionComputer = new IntersectionComputer(
+                        forwardFlow.getFlowId(), forwardFlow.getProtectedPathId(), flowSegmentsInGroup);
+
+                // target flow protected path
+                targetFlowDtoBuilder.protectedPath(FlowProtectedPathDto.builder()
+                        .forwardPath(buildFlowPath(
+                                currentFlow.getForward(),
+                                segmentsByCookie.get(currentFlow.getForward().getProtectedCookie())))
+                        .reversePath(buildFlowPath(
+                                currentFlow.getReverse(),
+                                segmentsByCookie.get(currentFlow.getReverse().getProtectedCookie())))
+                        .segmentsStats(
+                                protectedIntersectionComputer.getOverlappingStats())
+                        .build());
+
+                // other flows in the the group
+                List<FlowPathDto> protectedPathPayloads = flowPairsInGroup.stream()
+                        .filter(e -> !e.getForward().getFlowId().equals(flowId))
+                        .map(e -> this.mapGroupPathFlowDto(e, false, protectedIntersectionComputer, segmentsByCookie))
+                        .collect(Collectors.toList());
+                payloads = union(payloads, protectedPathPayloads);
+            }
+
+            payloads.add(targetFlowDtoBuilder.build());
 
             return payloads;
         }
     }
 
-    private GroupFlowPathPayload.GroupFlowPathPayloadBuilder toGroupFlowPathPayloadBuilder(FlowPair flowPair) {
-        return GroupFlowPathPayload.builder()
-                .id(flowPair.getForward().getFlowId())
-                .forwardPath(buildPathFromFlow(flowPair.getForward()))
-                .reversePath(buildPathFromFlow(flowPair.getReverse()));
+    private FlowPathDto mapGroupPathFlowDto(FlowPair e, boolean primaryPathCorrespondStat,
+                                            IntersectionComputer intersectionComputer,
+                                            Map<Long, List<FlowSegment>> segmentsByCookie) {
+        FlowPathDtoBuilder builder = this.toFlowPathDtoBuilder(e, segmentsByCookie)
+                .primaryPathCorrespondStat(primaryPathCorrespondStat)
+                .segmentsStats(
+                        intersectionComputer.getOverlappingStats(e.getForward().getPrimaryPathId()));
+        if (e.getForward().isAllocateProtectedPath()) {
+            builder.protectedPath(FlowProtectedPathDto.builder()
+                    .forwardPath(buildFlowPath(
+                            e.getForward(),
+                            segmentsByCookie.get(e.getForward().getProtectedCookie())))
+                    .reversePath(buildFlowPath(
+                            e.getReverse(),
+                            segmentsByCookie.get(e.getReverse().getProtectedCookie())))
+                    .segmentsStats(
+                            intersectionComputer.getOverlappingStats(e.getForward().getProtectedPathId()))
+                    .build());
+        }
+        return builder.build();
     }
 
-    private List<PathNodePayload> buildPathFromFlow(Flow flow) {
-        List<FlowPath.Node> path = new ArrayList<>(flow.getFlowPath().getNodes());
-        // add input and output nodes
-        path.add(0, FlowPath.Node.builder()
-                .switchId(flow.getSrcSwitch().getSwitchId())
-                .portNo(flow.getSrcPort())
-                .build());
-        path.add(FlowPath.Node.builder()
-                .switchId(flow.getDestSwitch().getSwitchId())
-                .portNo(flow.getDestPort())
-                .build());
+    private FlowPathDtoBuilder toFlowPathDtoBuilder(FlowPair flowPair,
+                                                                Map<Long, List<FlowSegment>> segmentsByCookie) {
+        Flow forward = flowPair.getForward();
+        Flow reverse = flowPair.getReverse();
+        return FlowPathDto.builder()
+                .id(forward.getFlowId())
+                .forwardPath(buildFlowPath(forward, segmentsByCookie.get(forward.getCookie())))
+                .reversePath(buildFlowPath(reverse, segmentsByCookie.get(reverse.getCookie())));
+    }
+
+    private List<PathNodePayload> buildFlowPath(Flow flow, List<FlowSegment> segments) {
+        segments = MoreObjects.firstNonNull(segments, emptyList());
+
+        // single switch
+        if (segments.isEmpty()) {
+            return Collections.singletonList(
+                    new PathNodePayload(flow.getSrcSwitch().getSwitchId(), flow.getSrcPort(), flow.getDestPort()));
+        }
+
+        if (segments.size() == 1) {
+            FlowSegment segment = segments.get(0);
+            return Lists.newArrayList(
+                    new PathNodePayload(flow.getSrcSwitch().getSwitchId(), flow.getSrcPort(), segment.getSrcPort()),
+                    new PathNodePayload(
+                            segment.getDestSwitch().getSwitchId(), segment.getDestPort(), flow.getDestPort()));
+        }
 
         List<PathNodePayload> resultList = new ArrayList<>();
-        for (int i = 1; i < path.size(); i += 2) {
-            FlowPath.Node inputNode = path.get(i - 1);
-            FlowPath.Node outputNode = path.get(i);
+        segments.sort(Comparator.comparing(FlowSegment::getSeqId));
 
-            resultList.add(
-                    new PathNodePayload(inputNode.getSwitchId(), inputNode.getPortNo(), outputNode.getPortNo()));
+        // inbound switch
+        resultList.add(new PathNodePayload(
+                flow.getSrcSwitch().getSwitchId(), flow.getSrcPort(), segments.get(0).getSrcPort()));
+
+        for (int i = 1; i < segments.size(); i++) {
+            FlowSegment previous = segments.get(i - 1);
+            FlowSegment next = segments.get(i);
+
+            resultList.add(new PathNodePayload(
+                    previous.getDestSwitch().getSwitchId(), previous.getDestPort(), next.getSrcPort()));
         }
+        // dest switch
+        resultList.add(new PathNodePayload(
+                flow.getDestSwitch().getSwitchId(), segments.get(segments.size() - 1).getDestPort(), flow.getDestPort())
+        );
         return resultList;
     }
 

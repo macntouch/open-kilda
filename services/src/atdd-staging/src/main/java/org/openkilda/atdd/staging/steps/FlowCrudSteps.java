@@ -195,19 +195,7 @@ public class FlowCrudSteps implements En {
 
     @Then("^each flow is created and stored in TopologyEngine$")
     public void eachFlowIsCreatedAndStoredInTopologyEngine() {
-        List<FlowDto> expextedFlows = flows.stream()
-                .map(flow -> new FlowDto(flow.getId(),
-                        flow.getMaximumBandwidth(),
-                        flow.isIgnoreBandwidth(), flow.isPeriodicPings(), 0,
-                        flow.getDescription(), null, null,
-                        flow.getSource().getDatapath(),
-                        flow.getDestination().getDatapath(),
-                        flow.getSource().getPortNumber(),
-                        flow.getDestination().getPortNumber(),
-                        flow.getSource().getVlanId(),
-                        flow.getDestination().getVlanId(),
-                        0, 0, null, null, null, null))
-                .collect(toList());
+        List<FlowDto> expextedFlows = flows.stream().map(FlowDto::new).collect(toList());
 
         for (FlowDto expectedFlow : expextedFlows) {
             FlowPairDto<FlowDto, FlowDto> flowPair = Failsafe.with(retryPolicy()

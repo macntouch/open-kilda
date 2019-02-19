@@ -110,6 +110,9 @@ public class FlowSegment implements Serializable {
     @Property(name = "dst_port")
     private int destPort;
 
+    @Property(name = "path_id")
+    private String pathId;
+
     private long bandwidth;
 
     @Property(name = "ignore_bandwidth")
@@ -127,13 +130,14 @@ public class FlowSegment implements Serializable {
     @Builder(toBuilder = true)
     FlowSegment(String flowId, long cookie, //NOSONAR
                 Switch srcSwitch, Switch destSwitch, int srcPort, int destPort,
-                long bandwidth, boolean ignoreBandwidth, int seqId, Long latency) {
+                String pathId, long bandwidth, boolean ignoreBandwidth, int seqId, Long latency) {
         this.flowId = flowId;
         this.cookie = cookie;
         setSrcSwitch(srcSwitch);
         setDestSwitch(destSwitch);
         this.srcPort = srcPort;
         this.destPort = destPort;
+        this.pathId = pathId;
         this.bandwidth = bandwidth;
         this.ignoreBandwidth = ignoreBandwidth;
         this.seqId = seqId;

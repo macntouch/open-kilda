@@ -26,6 +26,8 @@ public interface FlowSegmentRepository extends Repository<FlowSegment> {
 
     Optional<FlowSegment> findBySrcSwitchIdAndCookie(SwitchId switchId, long flowCookie);
 
+    Collection<FlowSegment> findByFlowId(String flowId);
+
     Collection<FlowSegment> findByDestSwitchId(SwitchId switchId);
 
     Collection<FlowSegment> findBySrcSwitchId(SwitchId switchId);

@@ -34,17 +34,18 @@ public class FlowCreatePayload extends FlowPayload {
     /**
      * Instance constructor.
      *
-     * @param id               flow id
-     * @param source           flow source
-     * @param destination      flow destination
-     * @param maximumBandwidth flow maximum bandwidth
-     * @param ignoreBandwidth  should ignore bandwidth in path computation
-     * @param periodicPings    enable periodic flow pings
-     * @param description      flow description
+     * @param id                    flow id
+     * @param source                flow source
+     * @param destination           flow destination
+     * @param maximumBandwidth      flow maximum bandwidth
+     * @param ignoreBandwidth       should ignore bandwidth in path computation
+     * @param periodicPings         enable periodic flow pings
+     * @param allocateProtectedPath allocate flow protected path
+     * @param description           flow description
      * @param created          flow created timestamp
-     * @param lastUpdated      flow last updated timestamp
-     * @param diverseFlowId    make new flow diverse with FlowId
-     * @param status           flow status
+     * @param lastUpdated           flow last updated timestamp
+     * @param diverseFlowId         make new flow diverse with FlowId
+     * @param status                flow status
      * @param maxLatency       max latency
      * @param priority         flow priority
      */
@@ -55,6 +56,7 @@ public class FlowCreatePayload extends FlowPayload {
                              @JsonProperty("maximum-bandwidth") long maximumBandwidth,
                              @JsonProperty("ignore_bandwidth") Boolean ignoreBandwidth,
                              @JsonProperty("periodic-pings") Boolean periodicPings,
+                             @JsonProperty("allocate_protected_path") Boolean allocateProtectedPath,
                              @JsonProperty("description") String description,
                              @JsonProperty("created") String created,
                              @JsonProperty("last-updated") String lastUpdated,
@@ -62,8 +64,8 @@ public class FlowCreatePayload extends FlowPayload {
                              @JsonProperty("status") String status,
                              @JsonProperty("max-latency") Integer maxLatency,
                              @JsonProperty("priority") Integer priority) {
-        super(id, source, destination, maximumBandwidth, ignoreBandwidth, periodicPings, description, created,
-                lastUpdated, status, maxLatency, priority);
+        super(id, source, destination, maximumBandwidth, ignoreBandwidth, periodicPings, allocateProtectedPath, created,
+                description, lastUpdated, status, maxLatency, priority);
         this.diverseFlowId = diverseFlowId;
     }
 }

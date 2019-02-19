@@ -88,6 +88,27 @@ public class FlowResourcesManager {
         return FlowPair.builder().forward(forward).reverse(reverse).build();
     }
 
+    /**
+     * Allocate resources for the protected flow.
+     *
+     * @param protectedFlowPair the flow pair for resource allocation.
+     * @param primaryFlowPair the primary flow pair.
+     * @return the updated protectedFlowPair.
+     */
+    public FlowPair allocateProtectedFlow(FlowPair protectedFlowPair, FlowPair primaryFlowPair) {
+        log.debug("Allocate flow resources for protected flow {}.", protectedFlowPair);
+
+        int flowCookie = resourceCache.allocateCookie();
+        protectedFlowPair.getForward().setCookie(flowCookie | Flow.FORWARD_FLOW_COOKIE_MASK);
+        protectedFlowPair.getReverse().setCookie(flowCookie | Flow.REVERSE_FLOW_COOKIE_MASK);
+
+        // reuse transit vlan from primary path
+        protectedFlowPair.getForward().setTransitVlan(primaryFlowPair.getForward().getTransitVlan());
+        protectedFlowPair.getReverse().setTransitVlan(primaryFlowPair.getReverse().getTransitVlan());
+
+        return protectedFlowPair;
+    }
+
     private Flow allocateFlowResources(Flow flow) {
         Flow.FlowBuilder newFlow = flow.toBuilder();
         // Don't allocate a vlan for a single switch flow.
@@ -120,6 +141,18 @@ public class FlowResourcesManager {
         if (reverse.getMeterId() != null) {
             resourceCache.deallocateMeterId(reverse.getSrcSwitch().getSwitchId(), reverse.getMeterId());
         }
+    }
+
+    /**
+     * Deallocate the protected flow resources.
+     *
+     * @param primaryFlowPair flow which resources to deallocate.
+     */
+    public void deallocateProtectedFlow(FlowPair primaryFlowPair) {
+        log.debug("Deallocate flow resources for protected path {}.", primaryFlowPair);
+
+        Flow forward = primaryFlowPair.getForward();
+        resourceCache.deallocateCookie((int) (ResourceCache.FLOW_COOKIE_VALUE_MASK & forward.getProtectedCookie()));
     }
 
     public Set<Integer> getAllocatedVlans() {

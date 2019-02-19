@@ -32,9 +32,6 @@ import java.util.Objects;
 
 @Data
 public class FlowDto implements Serializable {
-    /**
-     * Serialization version number constant.
-     */
     private static final long serialVersionUID = 1L;
 
     private static final long MASK_COOKIE_FLAGS = 0x0000_0000_FFFF_FFFFL;
@@ -59,6 +56,9 @@ public class FlowDto implements Serializable {
 
     @JsonProperty("periodic-pings")
     private boolean periodicPings;
+
+    @JsonProperty("allocate_protected_path")
+    private boolean allocateProtectedPath;
 
     /**
      * Flow cookie.
@@ -157,6 +157,8 @@ public class FlowDto implements Serializable {
      * @param flowId            flow id
      * @param bandwidth         bandwidth
      * @param ignoreBandwidth   ignore bandwidth flag
+     * @param periodicPings     enable periodic pings
+     * @param allocateProtectedPath allocate protected flow path.
      * @param cookie            cookie
      * @param description       description
      * @param createdTime       flow created timestamp
@@ -180,6 +182,7 @@ public class FlowDto implements Serializable {
                    @JsonProperty("bandwidth") final long bandwidth,
                    @JsonProperty("ignore_bandwidth") boolean ignoreBandwidth,
                    @JsonProperty("periodic-pings") boolean periodicPings,
+                   @JsonProperty("allocate_protected_path") boolean allocateProtectedPath,
                    @JsonProperty("cookie") final long cookie,
                    @JsonProperty("description") final String description,
                    @JsonProperty("created_time") String createdTime,
@@ -200,6 +203,7 @@ public class FlowDto implements Serializable {
         this.bandwidth = bandwidth;
         this.ignoreBandwidth = ignoreBandwidth;
         this.periodicPings = periodicPings;
+        this.allocateProtectedPath = allocateProtectedPath;
         this.cookie = cookie;
         this.description = description;
         this.createdTime = createdTime;
@@ -216,32 +220,6 @@ public class FlowDto implements Serializable {
         this.state = state;
         this.maxLatency = maxLatency;
         this.priority = priority;
-    }
-
-    /**
-     * Copy constructor.
-     */
-    public FlowDto(FlowDto flow) {
-        this(flow.getFlowId(),
-                flow.getBandwidth(),
-                flow.isIgnoreBandwidth(),
-                flow.isPeriodicPings(),
-                flow.getCookie(),
-                flow.getDescription(),
-                flow.getCreatedTime(),
-                flow.getLastUpdated(),
-                flow.getSourceSwitch(),
-                flow.getDestinationSwitch(),
-                flow.getSourcePort(),
-                flow.getDestinationPort(),
-                flow.getSourceVlan(),
-                flow.getDestinationVlan(),
-                flow.getMeterId(),
-                flow.getTransitVlan(),
-                flow.getFlowPath(),
-                flow.getState(),
-                flow.getMaxLatency(),
-                flow.getPriority());
     }
 
     /**
@@ -268,6 +246,7 @@ public class FlowDto implements Serializable {
                 bandwidth,
                 ignoreBandwidth,
                 false,
+                false,
                 0,
                 description,
                 null, null,
@@ -285,6 +264,7 @@ public class FlowDto implements Serializable {
                 input.getMaximumBandwidth(),
                 input.isIgnoreBandwidth(),
                 input.isPeriodicPings(),
+                input.isAllocateProtectedPath(),
                 0,
                 input.getDescription(),
                 null, null,
@@ -297,18 +277,6 @@ public class FlowDto implements Serializable {
                 null, 0, null, null,
                 input.getMaxLatency(),
                 input.getPriority());
-    }
-
-    /**
-     * Returns whether this is a single switch flow.
-     */
-    @JsonIgnore
-    public boolean isOneSwitchFlow() {
-        // TODO(surabujin): there is no decision how it should react on null values in source/dest switches
-        if (sourceSwitch == null || destinationSwitch == null) {
-            return sourceSwitch == null && destinationSwitch == null;
-        }
-        return sourceSwitch.equals(destinationSwitch);
     }
 
     @JsonIgnore
@@ -359,17 +327,6 @@ public class FlowDto implements Serializable {
             isMatch = (cookie & 0x0080000000000000L) != 0;
         }
         return isMatch;
-    }
-
-    /**
-     * Checks if flow path contains specified switch.
-     *
-     * @param switchId switch id
-     * @return true if flow path contains specified switch
-     */
-    public boolean containsSwitchInPath(SwitchId switchId) {
-        return flowPath.getPath().stream()
-                .anyMatch(node -> node.getSwitchId().equals(switchId));
     }
 
     /**
