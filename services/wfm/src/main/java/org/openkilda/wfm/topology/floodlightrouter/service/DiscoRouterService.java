@@ -15,11 +15,15 @@
 
 package org.openkilda.wfm.topology.floodlightrouter.service;
 
+import org.openkilda.messaging.AliveRequest;
+import org.openkilda.messaging.AliveResponse;
+import org.openkilda.messaging.Destination;
 import org.openkilda.messaging.Message;
 import org.openkilda.messaging.command.CommandData;
 import org.openkilda.messaging.command.CommandMessage;
 import org.openkilda.messaging.command.discovery.DiscoverIslCommandData;
 import org.openkilda.messaging.command.discovery.DiscoverPathCommandData;
+import org.openkilda.messaging.command.discovery.NetworkCommandData;
 import org.openkilda.messaging.command.flow.BaseInstallFlow;
 import org.openkilda.messaging.command.flow.BatchInstallRequest;
 import org.openkilda.messaging.command.flow.DeleteMeterRequest;
@@ -33,27 +37,28 @@ import org.openkilda.messaging.command.switches.PortConfigurationRequest;
 import org.openkilda.messaging.command.switches.SwitchRulesDeleteRequest;
 import org.openkilda.messaging.command.switches.SwitchRulesInstallRequest;
 import org.openkilda.messaging.command.switches.ValidateRulesRequest;
-import org.openkilda.messaging.error.ErrorData;
-import org.openkilda.messaging.error.ErrorMessage;
-import org.openkilda.messaging.error.ErrorType;
 import org.openkilda.messaging.floodlight.request.PingRequest;
+import org.openkilda.messaging.info.InfoData;
+import org.openkilda.messaging.info.InfoMessage;
+import org.openkilda.messaging.info.discovery.NetworkDumpSwitchData;
+import org.openkilda.messaging.info.event.PortInfoData;
+import org.openkilda.messaging.info.event.SwitchInfoData;
 import org.openkilda.model.SwitchId;
 import org.openkilda.wfm.topology.floodlightrouter.Stream;
 
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.Set;
+import java.util.UUID;
 
 @Slf4j
-public class RouterService {
+public class DiscoRouterService {
     private final FloodlightTracker floodlightTracker;
     private final RequestTracker requestTracker;
-    private final Set<String> floodlights;
 
-    public RouterService(FloodlightTracker floodlightTracker, RequestTracker requestTracker, Set<String> floodlights) {
+
+    public DiscoRouterService(FloodlightTracker floodlightTracker, RequestTracker requestTracker) {
         this.floodlightTracker = floodlightTracker;
         this.requestTracker = requestTracker;
-        this.floodlights = floodlights;
     }
 
     /**
@@ -61,98 +66,102 @@ public class RouterService {
      * @param routerMessageSender callback to be used for message sending
      */
     public void doPeriodicProcessing(MessageSender routerMessageSender) {
-        requestTracker.cleanupOldMessages();
-    }
-
-    /**
-     * Process response from speaker flow.
-     * @param routerMessageSender callback to be used for message sending
-     * @param message message to be handled and resend
-     */
-    public void processSpeakerFlowResponse(MessageSender routerMessageSender, Message message) {
-        if (!requestTracker.checkReplyMessage(message.getCorrelationId(), false)) {
-            log.debug("Received outdated message {}", message);
-            return;
-        }
-        routerMessageSender.send(message, Stream.KILDA_FLOW);
-    }
-
-    /**
-     * Process request to speaker ping.
-     * @param routerMessageSender callback to be used for message sending
-     * @param message message to be handled and resend
-     */
-    public void processSpeakerPingRequest(MessageSender routerMessageSender, Message message) {
-        SwitchId switchId = lookupSwitchIdInCommandMessage(message);
-        if (switchId != null) {
-            String region = floodlightTracker.lookupRegion(switchId);
-            if (region == null) {
-                log.error("Received command message for the untracked switch: {} {}", switchId, message);
-            } else {
-                routerMessageSender.send(message, Stream.formatWithRegion(Stream.SPEAKER_PING, region));
-            }
-        } else {
-            log.warn("Received message without target switch from SPEAKER_PING stream: {}", message);
-        }
-    }
-
-    /**
-     * Process request to speaker flow.
-     * @param routerMessageSender callback to be used for message sending
-     * @param message message to be handled and resend
-     */
-    public void processSpeakerFlowRequest(MessageSender routerMessageSender, Message message) {
-        SwitchId switchId = lookupSwitchIdInCommandMessage(message);
-        if (switchId != null) {
+        for (String region : floodlightTracker.getRegionsForAliveRequest()) {
+            AliveRequest request = new AliveRequest();
+            CommandMessage message = new CommandMessage(request, System.currentTimeMillis(), UUID.randomUUID()
+                    .toString());
             requestTracker.trackMessage(message.getCorrelationId());
+            routerMessageSender.send(message, Stream.formatWithRegion(Stream.SPEAKER_DISCO, region));
+
+        }
+        requestTracker.cleanupOldMessages();
+        floodlightTracker.checkTimeouts();
+        floodlightTracker.handleUnmanagedSwitches(routerMessageSender);
+    }
+
+    /**
+     * Process response from speaker disco.
+     * @param routerMessageSender callback to be used for message sending
+     * @param message message to be handled and resend
+     */
+    public void processSpeakerDiscoResponse(MessageSender routerMessageSender,
+                                            Message message) {
+        if (message instanceof InfoMessage) {
+            InfoMessage infoMessage = (InfoMessage) message;
+            InfoData infoData = infoMessage.getData();
+            SwitchId switchId = null;
+            String region = ((InfoMessage) message).getRegion();
+            handleResponseFromSpeaker(routerMessageSender, region, message.getTimestamp());
+            if (infoData instanceof AliveResponse) {
+                if (!requestTracker.checkReplyMessage(message.getCorrelationId(), true)) {
+                    log.debug("Received outdated message {}", message);
+                }
+                return;
+            } else if (infoData instanceof  NetworkDumpSwitchData) {
+                if (!requestTracker.checkReplyMessage(message.getCorrelationId(), false)) {
+                    log.debug("Received outdated message {}", message);
+                    return;
+                }
+                switchId = ((NetworkDumpSwitchData) infoData).getSwitchRecord().getDatapath();
+            } else if (infoData instanceof SwitchInfoData) {
+                switchId = ((SwitchInfoData) infoData).getSwitchId();
+            } else if (infoData instanceof PortInfoData) {
+                switchId = ((PortInfoData) infoData).getSwitchId();
+            }
+
+            // NOTE(tdurakov): need to notify of a mapping update
+            if (switchId != null && region != null && floodlightTracker.updateSwitchRegion(switchId, region)) {
+                routerMessageSender.send(new SwitchLocation(switchId, region), Stream.REGION_NOTIFICATION);
+            }
+        }
+        routerMessageSender.send(message, Stream.TOPO_DISCO);
+    }
+
+
+
+
+    /**
+     * Process request to speaker disco.
+     * @param routerMessageSender callback to be used for message sending
+     * @param message message to be handled and resend
+     */
+    public void processDiscoSpeakerRequest(MessageSender routerMessageSender, Message message) {
+        requestTracker.trackMessage(message.getCorrelationId());
+        SwitchId switchId = lookupSwitchIdInCommandMessage(message);
+        if (switchId != null) {
             String region = floodlightTracker.lookupRegion(switchId);
             if (region == null) {
                 log.error("Received command message for the untracked switch: {} {}", switchId, message);
             } else {
-                String stream = Stream.formatWithRegion(Stream.SPEAKER_FLOW, region);
+                String stream = Stream.formatWithRegion(Stream.SPEAKER_DISCO, region);
                 routerMessageSender.send(message, stream);
             }
         } else {
-            log.warn("Received message without target switch from SPEAKER_FLOW stream: {}", message);
+            log.warn("Received message without target switch from SPEAKER_DISCO stream: {}", message);
         }
     }
 
-    /**
-     * Process request to speaker.
-     * @param routerMessageSender callback to be used for message sending
-     * @param message message to be handled and resend
-     */
-    public void processSpeakerRequest(MessageSender routerMessageSender, Message message) {
-        SwitchId switchid = lookupSwitchIdInCommandMessage(message);
-        requestTracker.trackMessage(message.getCorrelationId());
-        if (switchid == null) {
-            log.debug("No target switch found, processing to all regions: {}", message);
-            for (String region: floodlights) {
-                routerMessageSender.send(message, Stream.formatWithRegion(Stream.SPEAKER, region));
-            }
-        } else {
-            String region = floodlightTracker.lookupRegion(switchid);
-            if (region != null) {
-                String stream = Stream.formatWithRegion(Stream.SPEAKER, region);
-                routerMessageSender.send(message, stream);
-            } else {
-                log.error("Received command message for the untracked switch: {} {}", switchid, message);
-                if (message instanceof CommandMessage) {
-                    CommandMessage commandMessage = (CommandMessage) message;
-                    if (commandMessage.getData() instanceof ValidateRulesRequest) {
-                        String errorDetails = String.format("Switch %s was not found", switchid.toString());
-                        ErrorData errorData = new ErrorData(ErrorType.NOT_FOUND, errorDetails, errorDetails);
-                        ErrorMessage errorMessage = new ErrorMessage(errorData, System.currentTimeMillis(),
-                                message.getCorrelationId(), null);
-                        routerMessageSender.send(errorMessage, Stream.NORTHBOUND_REPLY);
-                    }
-                }
-            }
+    private void handleResponseFromSpeaker(MessageSender routerMessageSender, String region,
+                                                long timestamp) {
+        boolean requireSync = floodlightTracker.handleAliveResponse(region, timestamp);
+        if (requireSync) {
+            log.info("Region {} requires sync", region);
+            sendNetworkRequest(routerMessageSender, region);
         }
     }
 
-    public void updateSwitchMapping(SwitchLocation location) {
-        floodlightTracker.updateSwitchRegion(location.getSwitchId(), location.getRegion());
+    private String sendNetworkRequest(MessageSender routerMessageSender, String region) {
+        String correlationId = UUID.randomUUID().toString();
+        requestTracker.trackMessage(correlationId);
+        CommandMessage command = new CommandMessage(new NetworkCommandData(),
+                System.currentTimeMillis(), correlationId,
+                Destination.CONTROLLER);
+
+        log.info(
+                "Send network dump request (correlation-id: {})",
+                correlationId);
+        routerMessageSender.send(command, Stream.formatWithRegion(Stream.SPEAKER, region));
+        return correlationId;
     }
 
     private SwitchId lookupSwitchIdInCommandMessage(Message message) {

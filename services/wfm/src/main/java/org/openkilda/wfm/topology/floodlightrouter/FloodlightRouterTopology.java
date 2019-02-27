@@ -18,6 +18,7 @@ package org.openkilda.wfm.topology.floodlightrouter;
 import org.openkilda.config.KafkaTopicsConfig;
 import org.openkilda.wfm.LaunchEnvironment;
 import org.openkilda.wfm.topology.AbstractTopology;
+import org.openkilda.wfm.topology.floodlightrouter.bolts.DiscoRouterBolt;
 import org.openkilda.wfm.topology.floodlightrouter.bolts.RouterBolt;
 
 import org.apache.storm.generated.StormTopology;
@@ -65,18 +66,30 @@ public class FloodlightRouterTopology extends AbstractTopology<FloodlightRouterT
         builder.setSpout(ComponentType.SPEAKER_PING_KAFKA_SPOUT, speakerPingKafkaSout, parallelism);
     }
 
+    private void createDiscoRouterBolt(TopologyBuilder builder) {
+        // Main Router
+        DiscoRouterBolt routerBolt = new DiscoRouterBolt(topologyConfig.getFloodlightRegions(),
+                topologyConfig.getFloodligthAliveTimeout(),  topologyConfig.getFloodlightAliveInterval(),
+                topologyConfig.getFloodligthRequestTimeout(),
+                topologyConfig.getMessageBlacklistTimeout());
+        builder.setBolt(ComponentType.DISCO_ROUTER_BOLT, routerBolt, topologyConfig.getParallelism())
+                .shuffleGrouping(ComponentType.ROUTER_TOPO_DISCO_SPOUT)
+                .shuffleGrouping(ComponentType.SPEAKER_DISCO_KAFKA_SPOUT);
+    }
+
     private void createRouterBolt(TopologyBuilder builder) {
         // Main Router
         RouterBolt routerBolt = new RouterBolt(topologyConfig.getFloodlightRegions(),
-                topologyConfig.getFloodligthAliveTimeout(), topologyConfig.getFloodligthRequestTimeout(),
+                topologyConfig.getFloodligthAliveTimeout(),  topologyConfig.getFloodlightAliveInterval(),
+                topologyConfig.getFloodligthRequestTimeout(),
                 topologyConfig.getMessageBlacklistTimeout());
         builder.setBolt(ComponentType.ROUTER_BOLT, routerBolt, topologyConfig.getParallelism())
                 .shuffleGrouping(ComponentType.ROUTER_SPEAKER_KAFKA_SPOUT)
-                .shuffleGrouping(ComponentType.ROUTER_TOPO_DISCO_SPOUT)
-                .shuffleGrouping(ComponentType.SPEAKER_DISCO_KAFKA_SPOUT)
                 .shuffleGrouping(ComponentType.ROUTER_SPEAKER_FLOW_KAFKA_SPOUT)
                 .shuffleGrouping(ComponentType.KILDA_FLOW_KAFKA_SPOUT)
-                .shuffleGrouping(ComponentType.SPEAKER_PING_KAFKA_SPOUT);
+                .shuffleGrouping(ComponentType.SPEAKER_PING_KAFKA_SPOUT)
+                .shuffleGrouping(ComponentType.DISCO_ROUTER_BOLT, Stream.REGION_NOTIFICATION);
+
 
     }
 
@@ -98,7 +111,7 @@ public class FloodlightRouterTopology extends AbstractTopology<FloodlightRouterT
         String speakerDiscoRegionStream = Stream.formatWithRegion(Stream.SPEAKER_DISCO, region);
         KafkaBolt speakerDiscoKafkaBolt = createKafkaBolt(speakerDiscoRegionTopic);
         builder.setBolt(Stream.formatWithRegion(ComponentType.SPEAKER_DISCO_KAFKA_BOLT, region), speakerDiscoKafkaBolt,
-                parallelism).shuffleGrouping(ComponentType.ROUTER_BOLT, speakerDiscoRegionStream);
+                parallelism).shuffleGrouping(ComponentType.DISCO_ROUTER_BOLT, speakerDiscoRegionStream);
     }
 
     private void createSpeakerFlowKafkaBolt(TopologyBuilder builder, String region, KafkaTopicsConfig topicsConfig,
@@ -135,7 +148,7 @@ public class FloodlightRouterTopology extends AbstractTopology<FloodlightRouterT
     private void createRouterDiscoKafkaBolt(TopologyBuilder builder, int parallelism, KafkaTopicsConfig topicsConfig) {
         KafkaBolt topoDiscoKafkaBolt = createKafkaBolt(topicsConfig.getTopoDiscoTopic());
         builder.setBolt(ComponentType.TOPO_DISCO_KAFKA_BOLT, topoDiscoKafkaBolt, parallelism)
-                .shuffleGrouping(ComponentType.ROUTER_BOLT, Stream.TOPO_DISCO);
+                .shuffleGrouping(ComponentType.DISCO_ROUTER_BOLT, Stream.TOPO_DISCO);
     }
 
     private void createKildaFlowKafkaBolt(TopologyBuilder builder, int parallelism, KafkaTopicsConfig topicsConfig) {
@@ -165,6 +178,7 @@ public class FloodlightRouterTopology extends AbstractTopology<FloodlightRouterT
         createSpeakerPingSpout(builder, parallelism, topicsConfig);
 
         createRouterBolt(builder);
+        createDiscoRouterBolt(builder);
 
         List<String> speakerTopoDiscoTopics = new ArrayList<>();
         List<String> kildaFlowTopics = new ArrayList<>();
@@ -192,10 +206,10 @@ public class FloodlightRouterTopology extends AbstractTopology<FloodlightRouterT
         // Floodlight -- kilda.flow --> Router
         createKildaFlowSpout(builder, parallelism, kildaFlowTopics);
 
-        // Floodlight -- topo.disco --> Router
+        // Floodlight -- kilda.topo.disco --> Router
         createKildaTopoDiscoSpout(builder, parallelism, speakerTopoDiscoTopics);
 
-        // Router -- router.disco --> OFEventTopology
+        // Router -- kilda.topo.disco --> OFEventTopology
         createRouterDiscoKafkaBolt(builder, parallelism, topicsConfig);
 
         // Router -- kilda.flow --> FlowTopology

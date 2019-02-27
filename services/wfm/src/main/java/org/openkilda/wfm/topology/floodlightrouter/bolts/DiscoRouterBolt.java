@@ -21,11 +21,10 @@ import org.openkilda.messaging.Message;
 import org.openkilda.wfm.topology.AbstractTopology;
 import org.openkilda.wfm.topology.floodlightrouter.ComponentType;
 import org.openkilda.wfm.topology.floodlightrouter.Stream;
+import org.openkilda.wfm.topology.floodlightrouter.service.DiscoRouterService;
 import org.openkilda.wfm.topology.floodlightrouter.service.FloodlightTracker;
 import org.openkilda.wfm.topology.floodlightrouter.service.MessageSender;
 import org.openkilda.wfm.topology.floodlightrouter.service.RequestTracker;
-import org.openkilda.wfm.topology.floodlightrouter.service.RouterService;
-import org.openkilda.wfm.topology.floodlightrouter.service.SwitchLocation;
 import org.openkilda.wfm.topology.utils.AbstractTickStatefulBolt;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -42,7 +41,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 import java.util.Set;
 
-public class RouterBolt extends AbstractTickStatefulBolt<InMemoryKeyValueState<String, Object>>
+public class DiscoRouterBolt extends AbstractTickStatefulBolt<InMemoryKeyValueState<String, Object>>
         implements MessageSender {
 
     private static final Logger logger = LoggerFactory.getLogger(RouterBolt.class);
@@ -55,20 +54,18 @@ public class RouterBolt extends AbstractTickStatefulBolt<InMemoryKeyValueState<S
     private final long messageBlacklistTimeout;
     private final long floodlightAliveInterval;
 
-    private transient RouterService routerService;
+    private transient DiscoRouterService routerService;
 
     protected OutputCollector outputCollector;
-
     private Tuple currentTuple;
 
-    public RouterBolt(Set<String> floodlights, long floodlightAliveTimeout, long  floodlightAliveInterval,
+    public DiscoRouterBolt(Set<String> floodlights, long floodlightAliveTimeout, long floodlightAliveInterval,
                       long floodlightRequestTimeout, long messageBlacklistTimeout) {
         this.floodlights = floodlights;
         this.floodlightAliveTimeout = floodlightAliveTimeout;
         this.floodlightRequestTimeout = floodlightRequestTimeout;
-        this.messageBlacklistTimeout = messageBlacklistTimeout;
         this.floodlightAliveInterval = floodlightAliveInterval;
-
+        this.messageBlacklistTimeout = messageBlacklistTimeout;
     }
 
     @Override
@@ -81,55 +78,36 @@ public class RouterBolt extends AbstractTickStatefulBolt<InMemoryKeyValueState<S
     protected void doWork(Tuple input) {
         String sourceComponent = input.getSourceComponent();
         currentTuple = input;
-        if (Stream.REGION_NOTIFICATION.equals(input.getSourceStreamId())) {
-            try {
-                routerService.updateSwitchMapping((SwitchLocation) input.getValueByField(
-                        AbstractTopology.MESSAGE_FIELD));
-
-            } catch (Exception e) {
-                logger.error("Failed to process switch mapping notification {}", input);
-            } finally {
-                outputCollector.ack(input);
+        try {
+            String json = input.getValueByField(AbstractTopology.MESSAGE_FIELD).toString();
+            Message message = MAPPER.readValue(json, Message.class);
+            switch (sourceComponent) {
+                case ComponentType.ROUTER_TOPO_DISCO_SPOUT:
+                    routerService.processSpeakerDiscoResponse(this, message);
+                    break;
+                case ComponentType.SPEAKER_DISCO_KAFKA_SPOUT:
+                    routerService.processDiscoSpeakerRequest(this, message);
+                    break;
+                default:
+                    logger.error("Unknown input stream handled: {}", sourceComponent);
+                    break;
             }
-        } else {
-            try {
-                String json = input.getValueByField(AbstractTopology.MESSAGE_FIELD).toString();
-                Message message = MAPPER.readValue(json, Message.class);
-                switch (sourceComponent) {
-                    case ComponentType.KILDA_FLOW_KAFKA_SPOUT:
-                        routerService.processSpeakerFlowResponse(this, message);
-                        break;
-                    case ComponentType.ROUTER_SPEAKER_KAFKA_SPOUT:
-                        routerService.processSpeakerRequest(this, message);
-                        break;
-                    case ComponentType.ROUTER_SPEAKER_FLOW_KAFKA_SPOUT:
-                        routerService.processSpeakerFlowRequest(this, message);
-                        break;
-
-                    case ComponentType.SPEAKER_PING_KAFKA_SPOUT:
-                        routerService.processSpeakerPingRequest(this, message);
-                        break;
-                    default:
-                        logger.error("Unknown input stream handled: {}", sourceComponent);
-                        break;
-                }
-            } catch (Exception e) {
-                logger.error("failed to process message {}", input);
-            } finally {
-                outputCollector.ack(input);
-            }
+        } catch (Exception e) {
+            logger.error("failed to process message");
+        } finally {
+            outputCollector.ack(input);
         }
     }
 
     @Override
-    public void initState(InMemoryKeyValueState<String, Object> state) {
-        routerService = (RouterService) state.get(ROUTER_SERVICE);
+    public void initState(InMemoryKeyValueState<String, Object> entries) {
+        routerService = (DiscoRouterService) entries.get(ROUTER_SERVICE);
         if (routerService == null) {
             RequestTracker requestTracker = new RequestTracker(floodlightRequestTimeout, messageBlacklistTimeout);
             FloodlightTracker floodlightTracker = new FloodlightTracker(floodlights, floodlightAliveTimeout,
                     floodlightAliveInterval);
-            routerService = new RouterService(floodlightTracker, requestTracker, floodlights);
-            state.put(ROUTER_SERVICE, routerService);
+            routerService = new DiscoRouterService(floodlightTracker, requestTracker);
+            entries.put(ROUTER_SERVICE, routerService);
         }
     }
 
@@ -142,15 +120,11 @@ public class RouterBolt extends AbstractTickStatefulBolt<InMemoryKeyValueState<S
     @Override
     public void declareOutputFields(OutputFieldsDeclarer outputFieldsDeclarer) {
         for (String region : floodlights) {
-            outputFieldsDeclarer.declareStream(Stream.formatWithRegion(Stream.SPEAKER, region),
-                    new Fields(AbstractTopology.MESSAGE_FIELD));
-            outputFieldsDeclarer.declareStream(Stream.formatWithRegion(Stream.SPEAKER_FLOW, region),
-                    new Fields(AbstractTopology.MESSAGE_FIELD));
-            outputFieldsDeclarer.declareStream(Stream.formatWithRegion(Stream.SPEAKER_PING, region),
+            outputFieldsDeclarer.declareStream(Stream.formatWithRegion(Stream.SPEAKER_DISCO, region),
                     new Fields(AbstractTopology.MESSAGE_FIELD));
         }
-        outputFieldsDeclarer.declareStream(Stream.KILDA_FLOW, new Fields(AbstractTopology.MESSAGE_FIELD));
-        outputFieldsDeclarer.declareStream(Stream.NORTHBOUND_REPLY, new Fields(AbstractTopology.MESSAGE_FIELD));
+        outputFieldsDeclarer.declareStream(Stream.TOPO_DISCO, new Fields(AbstractTopology.MESSAGE_FIELD));
+        outputFieldsDeclarer.declareStream(Stream.REGION_NOTIFICATION, new Fields(AbstractTopology.MESSAGE_FIELD));
     }
 
 
@@ -169,8 +143,7 @@ public class RouterBolt extends AbstractTickStatefulBolt<InMemoryKeyValueState<S
         }
     }
 
-    @Override
-    public void send(Object payload, String outputStream) {
+    public  void send(Object payload, String outputStream) {
         Values values = new Values(payload);
         outputCollector.emit(outputStream, currentTuple, values);
     }

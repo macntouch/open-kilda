@@ -27,6 +27,10 @@ import java.util.Set;
 
 @Configuration
 public interface FloodlightRouterTopologyConfig extends AbstractTopologyConfig {
+    @Key("floodlight.alive.interval")
+    @Default("2")
+    Long getFloodlightAliveInterval();
+
     @Key("floodlight.alive.timeout")
     @Default("20")
     Long getFloodligthAliveTimeout();

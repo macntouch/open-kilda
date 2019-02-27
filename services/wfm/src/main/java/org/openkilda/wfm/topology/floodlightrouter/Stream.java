@@ -29,6 +29,7 @@ public final class Stream {
     public static final String KILDA_PING = "KILDA_PING";
     public static final String SPEAKER_DISCO = "SPEAKER_DISCO";
     public static final String NORTHBOUND_REPLY = "NORTHBOUND_REPLY";
+    public static final String REGION_NOTIFICATION = "REGION_NOTIFICATION";
 
     private Stream() {}
 }

@@ -223,7 +223,7 @@ class RecordHandler implements Runnable {
         int totalFailedAmount = getKafkaProducer().getFailedSendMessageCounter();
         getKafkaProducer().sendMessageAndTrack(context.getKafkaTopoDiscoTopic(),
                 new InfoMessage(new AliveResponse(context.getRegion(), totalFailedAmount), System.currentTimeMillis(),
-                        message.getCorrelationId()));
+                        message.getCorrelationId(), context.getRegion()));
     }
 
     private void doDiscoverIslCommand(CommandMessage message) {
@@ -235,7 +235,8 @@ class RecordHandler implements Runnable {
         DiscoPacketSendingConfirmation confirmation = new DiscoPacketSendingConfirmation(
                 new NetworkEndpoint(command.getSwitchId(), command.getPortNumber()));
         getKafkaProducer().sendMessageAndTrack(context.getKafkaTopoDiscoTopic(),
-                new InfoMessage(confirmation, System.currentTimeMillis(), message.getCorrelationId()));
+                new InfoMessage(confirmation, System.currentTimeMillis(), message.getCorrelationId(),
+                        context.getRegion()));
     }
 
     private void doDiscoverPathCommand(CommandData data) {

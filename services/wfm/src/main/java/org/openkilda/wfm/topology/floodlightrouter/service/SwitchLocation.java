@@ -15,20 +15,12 @@
 
 package org.openkilda.wfm.topology.floodlightrouter.service;
 
-import lombok.Data;
+import org.openkilda.model.SwitchId;
 
-@Data
-public class FloodlightInstance {
+import lombok.Value;
+
+@Value
+public class SwitchLocation {
+    private SwitchId switchId;
     private String region;
-    private long aliveTimeout;
-    private long lastAliveResponse;
-    private int missedAliveResponses;
-    private boolean alive;
-    private long lastResponse;
-
-    public FloodlightInstance(String region) {
-        this.region = region;
-    }
-
-
 }

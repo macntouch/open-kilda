@@ -32,6 +32,7 @@ public final class ComponentType {
     public static final String ROUTER_TOPO_DISCO_SPOUT = "ROUTER_TOPO_DISCO_SPOUT";
     public static final String TOPO_DISCO_KAFKA_BOLT = "TOPO_DISCO_KAFKA_BOLT";
     public static final String ROUTER_BOLT = "ROUTER_BOLT";
+    public static final String DISCO_ROUTER_BOLT = "DISCO_ROUTER_BOLT";
     public static final String NORTHBOND_REPLY_KAFKA_BOLT = "NORTHBOND_REPLY_KAFKA_BOLT";
 
     private ComponentType() {}

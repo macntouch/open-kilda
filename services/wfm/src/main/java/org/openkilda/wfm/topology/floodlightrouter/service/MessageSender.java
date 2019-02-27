@@ -15,20 +15,11 @@
 
 package org.openkilda.wfm.topology.floodlightrouter.service;
 
-import lombok.Data;
-
-@Data
-public class FloodlightInstance {
-    private String region;
-    private long aliveTimeout;
-    private long lastAliveResponse;
-    private int missedAliveResponses;
-    private boolean alive;
-    private long lastResponse;
-
-    public FloodlightInstance(String region) {
-        this.region = region;
-    }
+import org.openkilda.messaging.Message;
 
 
+public interface MessageSender {
+    void send(Message message, String outputStream);
+
+    void send(Object payload, String outputStream);
 }
