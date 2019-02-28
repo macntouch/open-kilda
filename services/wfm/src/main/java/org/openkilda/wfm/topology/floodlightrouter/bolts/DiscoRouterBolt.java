@@ -22,9 +22,8 @@ import org.openkilda.wfm.topology.AbstractTopology;
 import org.openkilda.wfm.topology.floodlightrouter.ComponentType;
 import org.openkilda.wfm.topology.floodlightrouter.Stream;
 import org.openkilda.wfm.topology.floodlightrouter.service.DiscoRouterService;
-import org.openkilda.wfm.topology.floodlightrouter.service.FloodlightTracker;
 import org.openkilda.wfm.topology.floodlightrouter.service.MessageSender;
-import org.openkilda.wfm.topology.floodlightrouter.service.RequestTracker;
+import org.openkilda.wfm.topology.floodlightrouter.service.tracker.FloodlightTracker;
 import org.openkilda.wfm.topology.utils.AbstractTickStatefulBolt;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -50,8 +49,6 @@ public class DiscoRouterBolt extends AbstractTickStatefulBolt<InMemoryKeyValueSt
 
     private final Set<String> floodlights;
     private final long floodlightAliveTimeout;
-    private final long floodlightRequestTimeout;
-    private final long messageBlacklistTimeout;
     private final long floodlightAliveInterval;
 
     private transient DiscoRouterService routerService;
@@ -59,13 +56,10 @@ public class DiscoRouterBolt extends AbstractTickStatefulBolt<InMemoryKeyValueSt
     protected OutputCollector outputCollector;
     private Tuple currentTuple;
 
-    public DiscoRouterBolt(Set<String> floodlights, long floodlightAliveTimeout, long floodlightAliveInterval,
-                      long floodlightRequestTimeout, long messageBlacklistTimeout) {
+    public DiscoRouterBolt(Set<String> floodlights, long floodlightAliveTimeout, long floodlightAliveInterval) {
         this.floodlights = floodlights;
         this.floodlightAliveTimeout = floodlightAliveTimeout;
-        this.floodlightRequestTimeout = floodlightRequestTimeout;
         this.floodlightAliveInterval = floodlightAliveInterval;
-        this.messageBlacklistTimeout = messageBlacklistTimeout;
     }
 
     @Override
@@ -103,10 +97,9 @@ public class DiscoRouterBolt extends AbstractTickStatefulBolt<InMemoryKeyValueSt
     public void initState(InMemoryKeyValueState<String, Object> entries) {
         routerService = (DiscoRouterService) entries.get(ROUTER_SERVICE);
         if (routerService == null) {
-            RequestTracker requestTracker = new RequestTracker(floodlightRequestTimeout, messageBlacklistTimeout);
             FloodlightTracker floodlightTracker = new FloodlightTracker(floodlights, floodlightAliveTimeout,
                     floodlightAliveInterval);
-            routerService = new DiscoRouterService(floodlightTracker, requestTracker);
+            routerService = new DiscoRouterService(floodlightTracker);
             entries.put(ROUTER_SERVICE, routerService);
         }
     }

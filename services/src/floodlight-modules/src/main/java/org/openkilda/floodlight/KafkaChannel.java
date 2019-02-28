@@ -116,7 +116,7 @@ public class KafkaChannel implements IFloodlightModule {
     }
 
     public String  getPingTopic() {
-        return topics.getPingTopic();
+        return formatTopicWithRegion(topics.getPingTopic());
     }
 
     private String formatTopicWithRegion(String topic) {

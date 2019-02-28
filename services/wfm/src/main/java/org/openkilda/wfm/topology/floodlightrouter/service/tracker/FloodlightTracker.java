@@ -13,12 +13,13 @@
  *   limitations under the License.
  */
 
-package org.openkilda.wfm.topology.floodlightrouter.service;
+package org.openkilda.wfm.topology.floodlightrouter.service.tracker;
 
 import org.openkilda.messaging.info.InfoMessage;
 import org.openkilda.messaging.info.switches.UnmanagedSwitchNotification;
 import org.openkilda.model.SwitchId;
 import org.openkilda.wfm.topology.floodlightrouter.Stream;
+import org.openkilda.wfm.topology.floodlightrouter.service.MessageSender;
 
 import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.slf4j.Slf4j;

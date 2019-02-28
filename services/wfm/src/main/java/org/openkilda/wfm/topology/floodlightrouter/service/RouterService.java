@@ -39,6 +39,7 @@ import org.openkilda.messaging.error.ErrorType;
 import org.openkilda.messaging.floodlight.request.PingRequest;
 import org.openkilda.model.SwitchId;
 import org.openkilda.wfm.topology.floodlightrouter.Stream;
+import org.openkilda.wfm.topology.floodlightrouter.service.tracker.FloodlightTracker;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -47,12 +48,10 @@ import java.util.Set;
 @Slf4j
 public class RouterService {
     private final FloodlightTracker floodlightTracker;
-    private final RequestTracker requestTracker;
     private final Set<String> floodlights;
 
-    public RouterService(FloodlightTracker floodlightTracker, RequestTracker requestTracker, Set<String> floodlights) {
+    public RouterService(FloodlightTracker floodlightTracker, Set<String> floodlights) {
         this.floodlightTracker = floodlightTracker;
-        this.requestTracker = requestTracker;
         this.floodlights = floodlights;
     }
 
@@ -61,7 +60,6 @@ public class RouterService {
      * @param routerMessageSender callback to be used for message sending
      */
     public void doPeriodicProcessing(MessageSender routerMessageSender) {
-        requestTracker.cleanupOldMessages();
     }
 
     /**
@@ -70,11 +68,16 @@ public class RouterService {
      * @param message message to be handled and resend
      */
     public void processSpeakerFlowResponse(MessageSender routerMessageSender, Message message) {
-        if (!requestTracker.checkReplyMessage(message.getCorrelationId(), false)) {
-            log.debug("Received outdated message {}", message);
-            return;
-        }
         routerMessageSender.send(message, Stream.KILDA_FLOW);
+    }
+
+    /**
+     * Process response from speaker ping.
+     * @param routerMessageSender callback to be used for message sending
+     * @param message message to be handled and resend
+     */
+    public void processSpeakerPingResponse(MessageSender routerMessageSender, Message message) {
+        routerMessageSender.send(message, Stream.KILDA_PING);
     }
 
     /**
@@ -104,7 +107,6 @@ public class RouterService {
     public void processSpeakerFlowRequest(MessageSender routerMessageSender, Message message) {
         SwitchId switchId = lookupSwitchIdInCommandMessage(message);
         if (switchId != null) {
-            requestTracker.trackMessage(message.getCorrelationId());
             String region = floodlightTracker.lookupRegion(switchId);
             if (region == null) {
                 log.error("Received command message for the untracked switch: {} {}", switchId, message);
@@ -124,7 +126,6 @@ public class RouterService {
      */
     public void processSpeakerRequest(MessageSender routerMessageSender, Message message) {
         SwitchId switchid = lookupSwitchIdInCommandMessage(message);
-        requestTracker.trackMessage(message.getCorrelationId());
         if (switchid == null) {
             log.debug("No target switch found, processing to all regions: {}", message);
             for (String region: floodlights) {

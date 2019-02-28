@@ -13,7 +13,7 @@
  *   limitations under the License.
  */
 
-package org.openkilda.wfm.topology.floodlightrouter.service;
+package org.openkilda.wfm.topology.floodlightrouter.service.tracker;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;

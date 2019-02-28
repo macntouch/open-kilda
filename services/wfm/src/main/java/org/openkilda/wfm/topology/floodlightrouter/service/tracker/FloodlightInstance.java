@@ -13,7 +13,7 @@
  *   limitations under the License.
  */
 
-package org.openkilda.wfm.topology.floodlightrouter.service;
+package org.openkilda.wfm.topology.floodlightrouter.service.tracker;
 
 import lombok.Data;
 
