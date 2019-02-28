@@ -42,10 +42,10 @@ public class RequestTracker {
     /**
      * Track new message for timeout handling.
      */
-    public void trackMessage(String correlationId) {
+    public void trackMessage(String correlationId, boolean chunkedResponse) {
         log.debug("Track message {}", correlationId);
         long now = System.currentTimeMillis();
-        TrackedMessage message = new TrackedMessage(correlationId, now, now, 0L);
+        TrackedMessage message = new TrackedMessage(correlationId, now, now, 0L, chunkedResponse);
         trackedRequests.put(correlationId, message);
     }
 
@@ -84,6 +84,18 @@ public class RequestTracker {
     }
 
     /**
+     * Set expected chunked responses.
+     * @param correlationId target message
+     * @param total amount of messages
+     */
+    public void setTotalForChunked(String correlationId, int total) {
+        TrackedMessage trackedMessage = trackedRequests.get(correlationId);
+        if (trackedMessage != null) {
+            trackedMessage.setExpectedResponses(total);
+        }
+    }
+
+    /**
      * Check new message for blacklist.
      * @return whether is message ok or not.
      */
@@ -109,7 +121,12 @@ public class RequestTracker {
         if (safeToDelete) {
             trackedRequests.remove(correlationId);
         } else {
-            message.setLastReplyTime(now);
+            message.decreaseExpectedResponses();
+            if (message.isChunkedResponse() && message.getExpectedResponses() == 0) {
+                trackedRequests.remove(correlationId);
+            } else {
+                message.setLastReplyTime(now);
+            }
         }
         return true;
     }

@@ -15,16 +15,29 @@
 
 package org.openkilda.wfm.topology.floodlightrouter.service;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
 
 @Data
-@AllArgsConstructor
 public class TrackedMessage {
     private final String correlationId;
     private final long timestamp;
     private long lastReplyTime;
     private long blacklistTime;
+    private int expectedResponses;
+    private boolean chunkedResponse;
+
+    public TrackedMessage(String correlationId, long timestamp, long lastReplyTime, long blacklistTime,
+                          boolean chunkedResponse) {
+        this.correlationId = correlationId;
+        this.timestamp = timestamp;
+        this.lastReplyTime = lastReplyTime;
+        this.blacklistTime = blacklistTime;
+        this.chunkedResponse = chunkedResponse;
+    }
+
+    public void decreaseExpectedResponses() {
+        this.expectedResponses--;
+    }
 
     /**
      * Tests whether request is expired or not.

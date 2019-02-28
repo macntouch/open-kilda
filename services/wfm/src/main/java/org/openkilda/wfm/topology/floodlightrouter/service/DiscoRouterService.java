@@ -38,8 +38,10 @@ import org.openkilda.messaging.command.switches.SwitchRulesDeleteRequest;
 import org.openkilda.messaging.command.switches.SwitchRulesInstallRequest;
 import org.openkilda.messaging.command.switches.ValidateRulesRequest;
 import org.openkilda.messaging.floodlight.request.PingRequest;
+import org.openkilda.messaging.info.ChunkedInfoMessage;
 import org.openkilda.messaging.info.InfoData;
 import org.openkilda.messaging.info.InfoMessage;
+import org.openkilda.messaging.info.discovery.DiscoPacketSendingConfirmation;
 import org.openkilda.messaging.info.discovery.NetworkDumpSwitchData;
 import org.openkilda.messaging.info.event.PortInfoData;
 import org.openkilda.messaging.info.event.SwitchInfoData;
@@ -70,7 +72,7 @@ public class DiscoRouterService {
             AliveRequest request = new AliveRequest();
             CommandMessage message = new CommandMessage(request, System.currentTimeMillis(), UUID.randomUUID()
                     .toString());
-            requestTracker.trackMessage(message.getCorrelationId());
+            requestTracker.trackMessage(message.getCorrelationId(), false);
             routerMessageSender.send(message, Stream.formatWithRegion(Stream.SPEAKER_DISCO, region));
 
         }
@@ -98,6 +100,8 @@ public class DiscoRouterService {
                 }
                 return;
             } else if (infoData instanceof  NetworkDumpSwitchData) {
+                ChunkedInfoMessage chunked = (ChunkedInfoMessage) message;
+                requestTracker.setTotalForChunked(message.getCorrelationId(), chunked.getTotalMessages());
                 if (!requestTracker.checkReplyMessage(message.getCorrelationId(), false)) {
                     log.debug("Received outdated message {}", message);
                     return;
@@ -107,6 +111,10 @@ public class DiscoRouterService {
                 switchId = ((SwitchInfoData) infoData).getSwitchId();
             } else if (infoData instanceof PortInfoData) {
                 switchId = ((PortInfoData) infoData).getSwitchId();
+            } else if (infoData instanceof DiscoPacketSendingConfirmation) {
+                if (!requestTracker.checkReplyMessage(message.getCorrelationId(), true)) {
+                    log.debug("Received outdated message {}", message);
+                }
             }
 
             // NOTE(tdurakov): need to notify of a mapping update
@@ -126,7 +134,7 @@ public class DiscoRouterService {
      * @param message message to be handled and resend
      */
     public void processDiscoSpeakerRequest(MessageSender routerMessageSender, Message message) {
-        requestTracker.trackMessage(message.getCorrelationId());
+        requestTracker.trackMessage(message.getCorrelationId(), false);
         SwitchId switchId = lookupSwitchIdInCommandMessage(message);
         if (switchId != null) {
             String region = floodlightTracker.lookupRegion(switchId);
@@ -152,7 +160,7 @@ public class DiscoRouterService {
 
     private String sendNetworkRequest(MessageSender routerMessageSender, String region) {
         String correlationId = UUID.randomUUID().toString();
-        requestTracker.trackMessage(correlationId);
+        requestTracker.trackMessage(correlationId, true);
         CommandMessage command = new CommandMessage(new NetworkCommandData(),
                 System.currentTimeMillis(), correlationId,
                 Destination.CONTROLLER);

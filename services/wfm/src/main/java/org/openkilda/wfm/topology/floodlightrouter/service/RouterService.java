@@ -104,7 +104,7 @@ public class RouterService {
     public void processSpeakerFlowRequest(MessageSender routerMessageSender, Message message) {
         SwitchId switchId = lookupSwitchIdInCommandMessage(message);
         if (switchId != null) {
-            requestTracker.trackMessage(message.getCorrelationId());
+            requestTracker.trackMessage(message.getCorrelationId(), false);
             String region = floodlightTracker.lookupRegion(switchId);
             if (region == null) {
                 log.error("Received command message for the untracked switch: {} {}", switchId, message);
@@ -124,7 +124,7 @@ public class RouterService {
      */
     public void processSpeakerRequest(MessageSender routerMessageSender, Message message) {
         SwitchId switchid = lookupSwitchIdInCommandMessage(message);
-        requestTracker.trackMessage(message.getCorrelationId());
+        requestTracker.trackMessage(message.getCorrelationId(), false);
         if (switchid == null) {
             log.debug("No target switch found, processing to all regions: {}", message);
             for (String region: floodlights) {
