@@ -4,16 +4,19 @@ import org.openkilda.functionaltests.BaseSpecification
 
 import groovy.util.logging.Slf4j
 import spock.lang.Narrative
+import spock.lang.Shared
 
 @Slf4j
 @Narrative("This test suit checks base functionality which can not be extracted into separate file.")
 class GrpcCommonSpec extends BaseSpecification {
-    def nFlowSwitch = northbound.activeSwitches.find { it.description =~ /NW[0-9]+.[0-9].[0-9]/ }
-    def pattern = /(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\-){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/
-    String switchIp = (nFlowSwitch.address =~ pattern)[0].replaceAll("-", ".")
+    @Shared
+    String switchIp
 
     def setUpOnce() {
         requireProfiles("hardware")
+        def nFlowSwitch = northbound.activeSwitches.find { it.description =~ /NW[0-9]+.[0-9].[0-9]/ }
+        def pattern = /(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\-){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/
+        switchIp = (nFlowSwitch.address =~ pattern)[0].replaceAll("-", ".")
     }
 
     def "Able to get switch status"() {

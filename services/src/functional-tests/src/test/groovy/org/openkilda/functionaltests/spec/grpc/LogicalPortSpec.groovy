@@ -21,17 +21,20 @@ a list of BFD ports to them to create a LAG for fast-failover for BFD sessions.
 
 NOTE: The GRPC implementation supports the LAG type only and it is set by default.""")
 class LogicalPortSpec extends BaseSpecification {
-    def nFlowSwitch = northbound.activeSwitches.find { it.description =~ /NW[0-9]+.[0-9].[0-9]/ }
-    def pattern = /(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\-){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/
-    String switchIp = (nFlowSwitch.address =~ pattern)[0].replaceAll("-", ".")
-
     @Shared
-    Integer switchPort = northbound.getPorts(nFlowSwitch.switchId) find { it.state == ["LINK_DOWN"] }
+    String switchIp
     @Shared
-    Integer switchLogicalPort = (10.toString() + switchPort.toString()).toInteger()
+    Integer switchPort
+    @Shared
+    Integer switchLogicalPort
 
     def setUpOnce() {
         requireProfiles("hardware")
+        def nFlowSwitch = northbound.activeSwitches.find { it.description =~ /NW[0-9]+.[0-9].[0-9]/ }
+        def pattern = /(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\-){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/
+        switchIp = (nFlowSwitch.address =~ pattern)[0].replaceAll("-", ".")
+        switchPort = northbound.getPorts(nFlowSwitch.switchId) find { it.state == ["LINK_DOWN"] }
+        switchLogicalPort = (10.toString() + switchPort.toString()).toInteger()
     }
 
     def "Able to create/read/delete logicalport"() {

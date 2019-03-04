@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.web.client.HttpClientErrorException
 import spock.lang.Narrative
+import spock.lang.Shared
 import spock.lang.Unroll
 
 @Slf4j
@@ -30,12 +31,14 @@ class LogSpec extends BaseSpecification {
     @Value('${grpc.remote.log.server.port}')
     Integer defaultRemoteLogServerPort
 
-    def nFlowSwitch = northbound.activeSwitches.find { it.description =~ /NW[0-9]+.[0-9].[0-9]/ }
-    def pattern = /(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\-){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/
-    String switchIp = (nFlowSwitch.address =~ pattern)[0].replaceAll("-", ".")
+    @Shared
+    String switchIp
 
     def setUpOnce() {
         requireProfiles("hardware")
+        def nFlowSwitch = northbound.activeSwitches.find { it.description =~ /NW[0-9]+.[0-9].[0-9]/ }
+        def pattern = /(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\-){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/
+        switchIp = (nFlowSwitch.address =~ pattern)[0].replaceAll("-", ".")
     }
 
     def "Able to enable log messages"() {
