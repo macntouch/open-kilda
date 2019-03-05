@@ -222,7 +222,7 @@ public class SwitchTrackingService implements IOFSwitchListener, IService {
         producerService.sendMessageAndTrack(discoveryTopic, dpId.toString(), message);
     }
 
-    private org.openkilda.messaging.info.event.PortChangeType toJsonType(PortChangeType type) {
+    private static org.openkilda.messaging.info.event.PortChangeType toJsonType(PortChangeType type) {
         switch (type) {
             case ADD:
                 return org.openkilda.messaging.info.event.PortChangeType.ADD;
@@ -244,7 +244,7 @@ public class SwitchTrackingService implements IOFSwitchListener, IService {
      * @param eventType type of event
      * @return Message
      */
-    private Message buildSwitchMessage(IOFSwitch sw, Switch switchRecord, SwitchChangeType eventType) {
+    private static Message buildSwitchMessage(IOFSwitch sw, Switch switchRecord, SwitchChangeType eventType) {
         return buildMessage(IofSwitchConverter.buildSwitchInfoData(sw, switchRecord, eventType));
     }
 
@@ -255,7 +255,7 @@ public class SwitchTrackingService implements IOFSwitchListener, IService {
      * @param eventType type of event
      * @return Message
      */
-    private Message buildSwitchMessage(DatapathId dpId, SwitchChangeType eventType) {
+    private static Message buildSwitchMessage(DatapathId dpId, SwitchChangeType eventType) {
         return buildMessage(new SwitchInfoData(new SwitchId(dpId.getLong()), eventType));
     }
 
@@ -267,7 +267,7 @@ public class SwitchTrackingService implements IOFSwitchListener, IService {
      * @param type type of port event
      * @return Message
      */
-    private Message buildPortMessage(final DatapathId switchId, final OFPort port, final PortChangeType type) {
+    private static Message buildPortMessage(final DatapathId switchId, final OFPort port, final PortChangeType type) {
         InfoData data = new PortInfoData(new SwitchId(switchId.getLong()), port.getPortNumber(),
                 null, toJsonType(type));
         return buildMessage(data);
@@ -279,8 +279,8 @@ public class SwitchTrackingService implements IOFSwitchListener, IService {
      * @param data data to use in the message body
      * @return Message
      */
-    private Message buildMessage(final InfoData data) {
-        return new InfoMessage(data, System.currentTimeMillis(), CorrelationContext.getId(), null, region);
+    private static Message buildMessage(final InfoData data) {
+        return new InfoMessage(data, System.currentTimeMillis(), CorrelationContext.getId(), null);
     }
 
     private Switch buildSwitch(IOFSwitch sw) {
@@ -289,8 +289,7 @@ public class SwitchTrackingService implements IOFSwitchListener, IService {
                                             port.isEnabled() ? SwitchPort.State.UP : SwitchPort.State.DOWN))
                 .collect(Collectors.toList());
         Set<Switch.Feature> features = featureDetector.detectSwitch(sw);
-        return new Switch(new SwitchId(sw.getId().getLong()), switchManager.getSwitchIpAddress(sw), features,
-                ports);
+        return new Switch(new SwitchId(sw.getId().getLong()), switchManager.getSwitchIpAddress(sw), features, ports);
     }
 
     private void logSwitchEvent(DatapathId dpId, SwitchChangeType event) {

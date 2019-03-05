@@ -171,7 +171,7 @@ public class PathVerificationService implements IFloodlightModule, IPathVerifica
     public void startUp(FloodlightModuleContext context) throws FloodlightModuleException {
         logger.info("Stating {}", PathVerificationService.class.getCanonicalName());
         KafkaChannel kafkaChannel = context.getServiceImpl(KafkaUtilityService.class).getKafkaChannel();
-        logger.error("region: {}", kafkaChannel.getRegion());
+        logger.debug("region: {}", kafkaChannel.getRegion());
         topoDiscoTopic = context.getServiceImpl(KafkaUtilityService.class).getKafkaChannel().getTopoDiscoTopic();
         region = context.getServiceImpl(KafkaUtilityService.class).getKafkaChannel().getRegion();
         InputService inputService = context.getServiceImpl(InputService.class);
@@ -472,6 +472,7 @@ public class PathVerificationService implements IFloodlightModule, IPathVerifica
 
             if (remoteSwitch == null) {
                 logger.warn("detected unknown remote switch {}", remoteSwitchId);
+                return;
             }
 
             if (!signed) {
@@ -483,11 +484,11 @@ public class PathVerificationService implements IFloodlightModule, IPathVerifica
             OFPort remotePort = OFPort.of(portBb.getShort());
             long latency = measureLatency(input, timestamp);
             logIsl.info("link discovered: {}-{} ===( {} ms )===> {}-{}",
-                    remoteSwitchId, remotePort, latency, input.getDpId(), inPort);
+                    remoteSwitch.getId(), remotePort, latency, input.getDpId(), inPort);
 
             // this verification packet was sent from remote switch/port to received switch/port
             // so the link direction is from remote switch/port to received switch/port
-            PathNode source = new PathNode(new SwitchId(remoteSwitchId.getLong()), remotePort.getPortNumber(), 0,
+            PathNode source = new PathNode(new SwitchId(remoteSwitch.getId().getLong()), remotePort.getPortNumber(), 0,
                             latency);
             PathNode destination = new PathNode(new SwitchId(input.getDpId().getLong()), inPort.getPortNumber(), 1);
             long speed = getSwitchPortSpeed(input.getDpId(), inPort);
@@ -500,8 +501,7 @@ public class PathVerificationService implements IFloodlightModule, IPathVerifica
                     .availableBandwidth(getAvailableBandwidth(speed))
                     .build();
 
-            Message message = new InfoMessage(path, System.currentTimeMillis(), CorrelationContext.getId(), null,
-                    region);
+            Message message = new InfoMessage(path, System.currentTimeMillis(), CorrelationContext.getId(), null);
 
             producerService.sendMessageAndTrack(topoDiscoTopic, message);
             logger.debug("packet_in processed for {}-{}", input.getDpId(), inPort);

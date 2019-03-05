@@ -41,3 +41,8 @@ isl.cost.when.under.maintenance=10000
 burst.coefficient=1.05
 
 bfd.offset=200
+
+opentsdb.metric.prefix=kilda.
+
+diversity.isl.weight=1000
+diversity.switch.weight=100

@@ -199,14 +199,14 @@ public class FlowCrudSteps implements En {
                 .map(flow -> new FlowDto(flow.getId(),
                         flow.getMaximumBandwidth(),
                         flow.isIgnoreBandwidth(), flow.isPeriodicPings(), 0,
-                        flow.getDescription(), null,
+                        flow.getDescription(), null, null,
                         flow.getSource().getDatapath(),
                         flow.getDestination().getDatapath(),
                         flow.getSource().getPortNumber(),
                         flow.getDestination().getPortNumber(),
                         flow.getSource().getVlanId(),
                         flow.getDestination().getVlanId(),
-                        0, 0, null, null))
+                        0, 0, null, null, null, null))
                 .collect(toList());
 
         for (FlowDto expectedFlow : expextedFlows) {

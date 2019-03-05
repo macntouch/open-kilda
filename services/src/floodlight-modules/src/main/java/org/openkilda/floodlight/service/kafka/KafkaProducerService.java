@@ -34,8 +34,6 @@ public class KafkaProducerService implements IKafkaProducerService {
 
     private static final Logger logger = LoggerFactory.getLogger(KafkaProducerService.class);
 
-
-
     private int failedSendMessageCounter;
     private Producer<String, String> producer;
     private final Map<String, AbstractWorker> workersMap = new HashMap<>();
@@ -151,7 +149,7 @@ public class KafkaProducerService implements IKafkaProducerService {
             String error = exception == null ? null : exception.toString();
             logger.debug("{}: {}, {}", this.getClass().getCanonicalName(), metadata, error);
 
-            if (exception == null) {
+            if (exception != null) {
                 service.failedSendMessageCounter++;
                 return;
             }

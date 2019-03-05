@@ -70,7 +70,8 @@ public class IslStatsBoltTest {
             .build();
     private static final long TIMESTAMP = 1507433872L;
 
-    private IslStatsBolt statsBolt = new IslStatsBolt();
+    private static final String METRIC_PREFIX = "kilda.";
+    private IslStatsBolt statsBolt = new IslStatsBolt(METRIC_PREFIX);
 
     private static final String CORRELATION_ID = "system";
     private static final Destination DESTINATION = null;
@@ -86,7 +87,7 @@ public class IslStatsBoltTest {
         assertThat(tsdbTuple.size(), is(1));
 
         Datapoint datapoint = Utils.MAPPER.readValue(tsdbTuple.get(0).toString(), Datapoint.class);
-        assertEquals("pen.isl.latency", datapoint.getMetric());
+        assertEquals(METRIC_PREFIX + "isl.latency", datapoint.getMetric());
         assertEquals((Long) TIMESTAMP, datapoint.getTime());
         assertEquals(LATENCY, datapoint.getValue());
 
@@ -112,7 +113,7 @@ public class IslStatsBoltTest {
         thrown.expect(Exception.class);
         thrown.expectMessage(containsString("is not an IslInfoData"));
         PortInfoData portData = new PortInfoData();
-        InfoMessage badMessage = new InfoMessage(portData, TIMESTAMP, CORRELATION_ID, null, null);
+        InfoMessage badMessage = new InfoMessage(portData, TIMESTAMP, CORRELATION_ID, null);
         statsBolt.getIslInfoData(statsBolt.getIslInfoData(badMessage.getData()));
     }
 }

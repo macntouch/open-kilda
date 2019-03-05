@@ -119,8 +119,8 @@ class FlowCrudSpec extends BaseSpecification {
         then: "Both flows are successfully created"
         northbound.getAllFlows()*.id.containsAll([flow1.id, flow2.id])
 
-        and: "cleanup: delete flows"
-        [flow1, flow2].each { northbound.deleteFlow(it.id) }
+        and: "Cleanup: delete flows"
+        [flow1, flow2].each { flowHelper.deleteFlow(it.id) }
 
         where:
         data << [
@@ -353,7 +353,7 @@ class FlowCrudSpec extends BaseSpecification {
         and: "The flow has symmetric forward and reverse paths even though there is a more preferable reverse path"
         def forwardIsls = pathHelper.getInvolvedIsls(PathHelper.convert(flowPath))
         def reverseIsls = pathHelper.getInvolvedIsls(PathHelper.convert(flowPath, "reversePath"))
-        forwardIsls.collect { islUtils.reverseIsl(it) }.reverse() == reverseIsls
+        forwardIsls.collect { it.reversed }.reverse() == reverseIsls
 
         and: "Delete the flow and reset costs"
         flowHelper.deleteFlow(flow.id)
@@ -363,7 +363,7 @@ class FlowCrudSpec extends BaseSpecification {
     @Unroll
     def "Error is returned if there is no available path to #data.isolatedSwitchType switch"() {
         given: "A switch that has no connection to other switches"
-        def isolatedSwitch = topology.activeSwitches.first()
+        def isolatedSwitch = topology.activeSwitches[1]
         topology.getBusyPortsForSwitch(isolatedSwitch).each { port ->
             northbound.portDown(isolatedSwitch.dpId, port)
         }

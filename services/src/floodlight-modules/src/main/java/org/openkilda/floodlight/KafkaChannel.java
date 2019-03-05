@@ -39,6 +39,10 @@ public class KafkaChannel implements IFloodlightModule {
         return config;
     }
 
+    public KafkaTopicsConfig getTopics() {
+        return topics;
+    }
+
     @Override
     public Collection<Class<? extends IFloodlightService>> getModuleServices() {
         return ImmutableList.of(
@@ -111,12 +115,12 @@ public class KafkaChannel implements IFloodlightModule {
         return topics.getTopoNbTopic();
     }
 
-    public String getTopoEngTopic() {
-        return formatTopicWithRegion(topics.getTopoEngTopic());
-    }
-
     public String  getPingTopic() {
         return formatTopicWithRegion(topics.getPingTopic());
+    }
+
+    public String getTopoSwitchManagerTopic() {
+        return topics.getTopoSwitchManagerTopic();
     }
 
     private String formatTopicWithRegion(String topic) {
