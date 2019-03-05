@@ -41,7 +41,6 @@ public abstract class AbstractBolt extends BaseRichBolt {
 
     @Getter(AccessLevel.PROTECTED)
     private transient OutputCollector output;
-    private transient TopologyContext topologyContext;
 
     @Getter(AccessLevel.PROTECTED)
     private transient Integer taskId;
@@ -107,7 +106,6 @@ public abstract class AbstractBolt extends BaseRichBolt {
     @Override
     public void prepare(Map stormConf, TopologyContext context, OutputCollector collector) {
         this.output = collector;
-        this.topologyContext = context;
         this.taskId = context.getThisTaskId();
 
         init();
@@ -125,7 +123,7 @@ public abstract class AbstractBolt extends BaseRichBolt {
             log.warn("The command context is missing in input tuple received by {} on stream {}, execution context"
                              + " can't  be traced. Create new command context for possible tracking of following"
                              + " processing [{}].",
-                     topologyContext.getThisComponentId(), formatTuplePayload(input));
+                     getClass().getName(), formatTuplePayload(input));
         }
     }
 
@@ -138,7 +136,7 @@ public abstract class AbstractBolt extends BaseRichBolt {
             } else {
                 value = (CommandContext) raw;
             }
-        } catch (ClassCastException e) {
+        } catch (IllegalArgumentException | ClassCastException e) {
             throw new PipelineException(this, input, FIELD_ID_CONTEXT, e.toString());
         }
         return value;
