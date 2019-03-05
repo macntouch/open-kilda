@@ -13,15 +13,19 @@
  *   limitations under the License.
  */
 
-package org.openkilda.wfm.topology.flowhs.service;
+package org.openkilda.wfm.topology.flowhs.fsm;
 
-import org.openkilda.floodlight.flow.request.FlowRequest;
-import org.openkilda.wfm.error.PipelineException;
-import org.openkilda.wfm.topology.flowhs.model.FlowResponses;
+import org.openkilda.messaging.Message;
+import org.openkilda.model.Flow;
 
-public interface SpeakerCommandCarrier {
+import lombok.Builder;
+import lombok.Data;
 
-    void sendCommand(String key, FlowRequest command) throws PipelineException;
+@Data
+@Builder
+public class FlowCreateContext {
 
-    void sendResponse(String key, FlowResponses response) throws PipelineException;
+    private Flow flow;
+    private Message message;
+
 }

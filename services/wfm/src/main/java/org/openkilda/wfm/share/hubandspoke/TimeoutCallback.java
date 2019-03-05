@@ -15,11 +15,15 @@
 
 package org.openkilda.wfm.share.hubandspoke;
 
+import org.openkilda.wfm.error.PipelineException;
+
+import org.apache.storm.tuple.Tuple;
+
 public interface TimeoutCallback {
 
     /**
      * Handler for timeout for pending request and define the way how such case will be processed.
      * @param key request id.
      */
-    void onTimeout(String key);
+    void onTimeout(String key, Tuple tuple) throws PipelineException;
 }

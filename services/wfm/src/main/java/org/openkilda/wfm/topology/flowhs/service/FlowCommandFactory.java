@@ -32,6 +32,8 @@ import org.openkilda.model.SwitchId;
 import org.openkilda.model.TransitVlan;
 import org.openkilda.persistence.repositories.TransitVlanRepository;
 
+import com.fasterxml.uuid.Generators;
+import com.fasterxml.uuid.NoArgGenerator;
 import com.google.common.collect.ImmutableList;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -43,12 +45,18 @@ import java.util.Optional;
 
 @Slf4j
 public class FlowCommandFactory {
+    private final NoArgGenerator commandIdGenerator = Generators.timeBasedGenerator();
     private final TransitVlanRepository transitVlanRepository;
 
     public FlowCommandFactory(TransitVlanRepository transitVlanRepository) {
         this.transitVlanRepository = transitVlanRepository;
     }
 
+    /**
+     * Creates commands for non ingress rules installation.
+     * @param flow input information for commands.
+     * @return list with commands.
+     */
     public List<InstallTransitRule> createInstallNonIngressRules(Flow flow) {
         if (flow.isOneSwitchFlow()) {
             return Collections.emptyList();
@@ -62,6 +70,11 @@ public class FlowCommandFactory {
         return commands;
     }
 
+    /**
+     * Creates commands for ingress rules installation.
+     * @param flow input information for commands.
+     * @return list with commands.
+     */
     public List<InstallIngressRule> createInstallIngressRules(Flow flow) {
         InstallIngressRule forwardIngressRule = buildInstallIngressRule(flow.getForwardPath(), flow.getSrcPort(),
                 flow.getSrcVlan(), flow.getDestVlan());
@@ -71,6 +84,11 @@ public class FlowCommandFactory {
         return ImmutableList.of(forwardIngressRule, reverseIngressRule);
     }
 
+    /**
+     * Creates commands for non ingress rules deletion.
+     * @param flow input information for commands.
+     * @return list with commands.
+     */
     public List<RemoveRule> createRemoveNonIngressRules(Flow flow) {
         if (flow.isOneSwitchFlow()) {
             // Removing of single switch rules is done with no output port in criteria.
@@ -83,6 +101,11 @@ public class FlowCommandFactory {
         return commands;
     }
 
+    /**
+     * Creates commands for ingress rules deletion.
+     * @param flow input information for commands.
+     * @return list with commands.
+     */
     public List<RemoveRule> createRemoveIngressRules(Flow flow) {
         RemoveRule removeForwardIngress =
                 buildRemoveIngressRule(flow.getForwardPath(), flow.getSrcPort(), flow.getSrcVlan());
@@ -106,7 +129,8 @@ public class FlowCommandFactory {
                         format("PathSegment was not found for ingress flow rule, flowId: %s", flowPath.getFlowId())));
 
         return InstallIngressRule.builder()
-                .id(flowPath.getFlowId())
+                .commandId(commandIdGenerator.generate().toString())
+                .flowId(flowPath.getFlowId())
                 .switchId(flowPath.getSrcSwitch().getSwitchId())
                 .cookie(flowPath.getCookie().getValue())
                 .bandwidth(flowPath.getBandwidth())
@@ -155,14 +179,15 @@ public class FlowCommandFactory {
 
     private InstallTransitRule buildInstallTransitRule(FlowPath flowPath, SwitchId switchId, int inputPort,
                                                        int outputPort, int transitVlan) {
-        return new InstallTransitRule(null, flowPath.getFlowId(), flowPath.getCookie().getValue(), switchId,
-                inputPort, outputPort, transitVlan);
+        return new InstallTransitRule(null, commandIdGenerator.generate().toString(), flowPath.getFlowId(),
+                flowPath.getCookie().getValue(), switchId, inputPort, outputPort, transitVlan);
     }
 
     private InstallEgressRule buildInstallEgressRule(FlowPath flowPath, int inputPort, int outputPort,
                                                      int srcVlan, int transitVlan, int destVlan) {
         return InstallEgressRule.builder()
-                .id(flowPath.getFlowId())
+                .commandId(commandIdGenerator.generate().toString())
+                .flowId(flowPath.getFlowId())
                 .switchId(flowPath.getDestSwitch().getSwitchId())
                 .cookie(flowPath.getCookie().getValue())
                 .inputPort(inputPort)
@@ -183,6 +208,7 @@ public class FlowCommandFactory {
         DeleteRulesCriteria ingressCriteria = new DeleteRulesCriteria(flowPath.getCookie().getValue(), inputPort,
                 inputVlanId, 0, ingressSegment.getSrcPort());
         return RemoveRule.builder()
+                .commandId(commandIdGenerator.generate().toString())
                 .flowId(flowPath.getFlowId())
                 .switchId(flowPath.getSrcSwitch().getSwitchId())
                 .cookie(flowPath.getCookie().getValue())
@@ -228,6 +254,7 @@ public class FlowCommandFactory {
         DeleteRulesCriteria criteria = new DeleteRulesCriteria(flowPath.getCookie().getValue(), inputPort, transitVlan,
                 0, outputPort);
         return RemoveRule.builder()
+                .commandId(commandIdGenerator.generate().toString())
                 .flowId(flowPath.getFlowId())
                 .cookie(flowPath.getCookie().getValue())
                 .switchId(switchId)
@@ -240,6 +267,7 @@ public class FlowCommandFactory {
                 0, outputPort);
 
         return RemoveRule.builder()
+                .commandId(commandIdGenerator.generate().toString())
                 .flowId(flowPath.getFlowId())
                 .cookie(flowPath.getCookie().getValue())
                 .criteria(criteria)

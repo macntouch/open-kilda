@@ -48,11 +48,13 @@ public abstract class FlowCommand extends OfCommand {
     protected static final long FLOW_COOKIE_MASK = 0x7FFFFFFFFFFFFFFFL;
     protected static final int FLOW_PRIORITY = FlowModUtils.PRIORITY_HIGH;
 
-    String flowId;
-    Long cookie;
+    final String commandId;
+    final String flowId;
+    final Long cookie;
 
-    FlowCommand(String flowId, MessageContext messageContext, Long cookie, SwitchId switchId) {
+    FlowCommand(String commandId, String flowId, MessageContext messageContext, Long cookie, SwitchId switchId) {
         super(switchId, messageContext);
+        this.commandId = commandId;
         this.flowId = flowId;
         this.cookie = cookie;
     }

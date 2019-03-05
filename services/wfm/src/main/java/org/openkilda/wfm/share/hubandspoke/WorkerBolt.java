@@ -64,15 +64,19 @@ public abstract class WorkerBolt extends CoordinatedBolt {
     @Override
     protected void handleInput(Tuple input) throws AbstractException {
         String key = input.getStringByField(MessageTranslator.KEY_FIELD);
-        String sender = input.getSourceComponent();
+        String sourceComponent = input.getSourceComponent();
 
-        if (workerConfig.getHubComponent().equals(sender)) {
+        if (workerConfig.getHubComponent().equals(sourceComponent)) {
             pendingTasks.put(key, input);
             registerCallback(key, input);
 
             onHubRequest(input);
-        } else if (pendingTasks.containsKey(key) && workerConfig.getWorkerSpoutComponent().equals(sender)) {
-            onAsyncResponse(input);
+        } else if (pendingTasks.containsKey(key)) {
+            if (workerConfig.getWorkerSpoutComponent().equals(sourceComponent)) {
+                onAsyncResponse(input);
+            } else if (CoordinatorBolt.ID.equals(sourceComponent)) {
+                onTimeout(key, input);
+            }
         } else {
             unhandledInput(input);
         }

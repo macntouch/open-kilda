@@ -15,33 +15,79 @@
 
 package org.openkilda.wfm.topology.flowhs.fsm;
 
+import org.openkilda.model.Flow;
+import org.openkilda.pce.PathComputer;
+import org.openkilda.persistence.PersistenceManager;
+import org.openkilda.wfm.share.flow.resources.FlowResourcesConfig;
+import org.openkilda.wfm.topology.flowhs.bolts.FlowCreateHubCarrier;
 import org.openkilda.wfm.topology.flowhs.fsm.FlowCreateFsm.Event;
 import org.openkilda.wfm.topology.flowhs.fsm.FlowCreateFsm.State;
+import org.openkilda.wfm.topology.flowhs.fsm.action.create.FlowValidateAction;
+import org.openkilda.wfm.topology.flowhs.fsm.action.create.InstallIngressRulesAction;
+import org.openkilda.wfm.topology.flowhs.fsm.action.create.InstallNonIngressRulesAction;
+import org.openkilda.wfm.topology.flowhs.fsm.action.create.ResourcesAllocateAction;
+import org.openkilda.wfm.topology.flowhs.fsm.action.create.ResourcesDeallocateAction;
+import org.openkilda.wfm.topology.flowhs.fsm.action.create.ValidateNonIngressRulesAction;
 
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.squirrelframework.foundation.fsm.StateMachineBuilder;
 import org.squirrelframework.foundation.fsm.StateMachineBuilderFactory;
 import org.squirrelframework.foundation.fsm.impl.AbstractStateMachine;
 
-public class FlowCreateFsm extends AbstractStateMachine<FlowCreateFsm, State, Event, Object> {
+import java.util.ArrayList;
+import java.util.List;
 
-    static FlowCreateFsm newInstance() {
-        StateMachineBuilder<FlowCreateFsm, State, Event, Object> builder =
-                StateMachineBuilderFactory.create(FlowCreateFsm.class, State.class, Event.class, Object.class);
+@Getter
+@Setter
+@Slf4j
+public final class FlowCreateFsm extends AbstractStateMachine<FlowCreateFsm, State, Event, FlowCreateContext> {
+
+    private String correlationId;
+    private Flow flow;
+    private FlowCreateHubCarrier carrier;
+    private List<String> errors = new ArrayList<>();
+
+    private FlowCreateFsm(String correlationId, Flow flow, FlowCreateHubCarrier carrier) {
+        this.correlationId = correlationId;
+        this.flow = flow;
+        this.carrier = carrier;
+    }
+
+    /**
+     * Returns builder for flow create fsm.
+     */
+    private static StateMachineBuilder<FlowCreateFsm, State, Event, FlowCreateContext> builder(
+            PersistenceManager persistenceManager, FlowResourcesConfig resourcesConfig, PathComputer pathComputer) {
+        StateMachineBuilder<FlowCreateFsm, State, Event, FlowCreateContext> builder =
+                StateMachineBuilderFactory.create(FlowCreateFsm.class, State.class, Event.class,
+                        FlowCreateContext.class,
+                        String.class, Flow.class, FlowCreateHubCarrier.class);
 
         builder.transitions()
                 .from(State.Initialized)
                 .toAmong(State.FlowValidated, State.FinishedWithError)
-                .onEach(Event.Next, Event.Error);
+                .onEach(Event.Next, Event.Error)
+                .perform(new FlowValidateAction(persistenceManager));
+
+        builder.transition()
+                .from(State.FlowValidated)
+                .to(State.ResourcesAllocated)
+                .on(Event.Next)
+                .perform(new ResourcesAllocateAction(persistenceManager, pathComputer, resourcesConfig));
 
         builder.transitions()
                 .from(State.FlowValidated)
-                .toAmong(State.ResourcesAllocated, State.ResourcesDeAllocated, State.FinishedWithError)
-                .onEach(Event.Next, Event.Timeout, Event.Error);
+                .toAmong(State.ResourcesDeAllocated, State.FinishedWithError)
+                .onEach(Event.Timeout, Event.Error)
+                .perform(new ResourcesDeallocateAction());
 
         builder.externalTransition()
                 .from(State.ResourcesAllocated)
                 .to(State.InstallingNonIngressRules)
-                .on(Event.Next);
+                .on(Event.Next)
+                .perform(new InstallNonIngressRulesAction(persistenceManager));
 
         builder.internalTransition()
                 .within(State.InstallingNonIngressRules)
@@ -49,15 +95,21 @@ public class FlowCreateFsm extends AbstractStateMachine<FlowCreateFsm, State, Ev
         builder.transitions()
                 .from(State.InstallingNonIngressRules)
                 .toAmong(State.ValidatingNonIngressRules, State.RemovingRules, State.RemovingRules)
-                .onEach(Event.Next, Event.Timeout, Event.Error);
+                .onEach(Event.Next, Event.Timeout, Event.Error)
+                .perform(new ValidateNonIngressRulesAction());
 
         builder.internalTransition()
                 .within(State.ValidatingNonIngressRules)
                 .on(Event.RuleValidated);
         builder.transitions()
                 .from(State.ValidatingNonIngressRules)
-                .toAmong(State.InstallingIngressRules, State.RemovingRules, State.InstallingNonIngressRules)
-                .onEach(Event.Next, Event.Timeout, Event.Error);
+                .toAmong(State.InstallingIngressRules)
+                .onEach(Event.Next)
+                .perform(new InstallIngressRulesAction(persistenceManager));
+        builder.transitions()
+                .from(State.ValidatingNonIngressRules)
+                .toAmong(State.RemovingRules, State.InstallingNonIngressRules)
+                .onEach(Event.Timeout, Event.Error);
 
         builder.internalTransition()
                 .within(State.InstallingIngressRules)
@@ -101,10 +153,10 @@ public class FlowCreateFsm extends AbstractStateMachine<FlowCreateFsm, State, Ev
                 .toFinal(State.FinishedWithError)
                 .on(Event.Next);
 
-        return builder.newStateMachine(State.Initialized);
+        return builder;
     }
 
-    enum State {
+    public enum State {
         Initialized,
         FlowValidated,
         ResourcesAllocated,
@@ -121,7 +173,7 @@ public class FlowCreateFsm extends AbstractStateMachine<FlowCreateFsm, State, Ev
         FinishedWithError,
     }
 
-    enum Event {
+    public enum Event {
         Next,
 
         RuleInstalled,
@@ -131,5 +183,39 @@ public class FlowCreateFsm extends AbstractStateMachine<FlowCreateFsm, State, Ev
 
         Timeout,
         Error
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static final class Builder {
+        private String correlationId;
+        private Flow flow;
+        private FlowCreateHubCarrier carrier;
+
+        private Builder() {}
+
+        public Builder withCorrelationId(String correlationId) {
+            this.correlationId = correlationId;
+            return this;
+        }
+
+        public Builder withFlow(Flow flow) {
+            this.flow = flow;
+            return this;
+        }
+
+        public Builder withCarrier(FlowCreateHubCarrier carrier) {
+            this.carrier = carrier;
+            return this;
+        }
+
+        public FlowCreateFsm build(PersistenceManager persistenceManager, FlowResourcesConfig resourcesConfig,
+                                   PathComputer pathComputer) {
+            return FlowCreateFsm.builder(persistenceManager, resourcesConfig, pathComputer)
+                    .newStateMachine(State.Initialized, correlationId, flow, carrier);
+        }
+
     }
 }

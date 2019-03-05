@@ -23,5 +23,5 @@ import java.util.List;
 
 @Value
 public class FlowCommands {
-    private List<FlowRequest> commands;
+    private List<? extends FlowRequest> commands;
 }

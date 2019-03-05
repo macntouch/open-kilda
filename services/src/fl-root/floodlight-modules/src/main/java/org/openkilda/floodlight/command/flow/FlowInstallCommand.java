@@ -31,9 +31,9 @@ public abstract class FlowInstallCommand extends FlowCommand {
     final Integer inputPort;
     final Integer outputPort;
 
-    FlowInstallCommand(String flowId, MessageContext messageContext, Long cookie, SwitchId switchId,
-                              Integer inputPort, Integer outputPort) {
-        super(flowId, messageContext, cookie, switchId);
+    FlowInstallCommand(String commandId, String flowId, MessageContext messageContext, Long cookie, SwitchId switchId,
+                       Integer inputPort, Integer outputPort) {
+        super(commandId, flowId, messageContext, cookie, switchId);
         this.inputPort = inputPort;
         this.outputPort = outputPort;
     }
@@ -45,7 +45,13 @@ public abstract class FlowInstallCommand extends FlowCommand {
 
     @Override
     protected FloodlightResponse buildResponse() {
-        return new FlowResponse(true, messageContext, flowId, switchId);
+        return FlowResponse.builder()
+                .commandId(commandId)
+                .flowId(flowId)
+                .messageContext(messageContext)
+                .success(true)
+                .switchId(switchId)
+                .build();
     }
 
     final OFFlowAdd.Builder prepareFlowModBuilder(OFFactory ofFactory, long cookie, int priority) {

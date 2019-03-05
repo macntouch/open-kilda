@@ -51,13 +51,7 @@ public class SpeakerWorkerBolt extends WorkerBolt {
     protected void onHubRequest(Tuple input) throws PipelineException {
         String key = input.getStringByField(KEY_FIELD);
         FlowCommands commands = (FlowCommands) input.getValueByField(FIELD_ID_PAYLOAD);
-
         service.sendCommands(key, commands, new WorkerCommandCarrier(input));
-
-        //todo: should be removed once FL request processing is fixed
-        for (FlowRequest request : commands.getCommands()) {
-            service.handleResponse(key, new FlowResponse(request, true), new WorkerCommandCarrier(input));
-        }
     }
 
     @Override
@@ -69,8 +63,8 @@ public class SpeakerWorkerBolt extends WorkerBolt {
     }
 
     @Override
-    public void onTimeout(String key) {
-        service.handleTimeout(key);
+    public void onTimeout(String key, Tuple tuple) throws PipelineException {
+        service.handleTimeout(key, new WorkerCommandCarrier(tuple));
     }
 
     @Override
@@ -88,13 +82,13 @@ public class SpeakerWorkerBolt extends WorkerBolt {
         }
 
         @Override
-        public void sendCommand(FlowRequest command) throws PipelineException {
-            emit(SPEAKER_WORKER_REQUEST_SENDER.name(), tuple, new Values(tuple.getStringByField(KEY_FIELD), command));
+        public void sendCommand(String key, FlowRequest command) throws PipelineException {
+            emit(SPEAKER_WORKER_REQUEST_SENDER.name(), tuple, new Values(key, command));
         }
 
         @Override
-        public void sendResponse(FlowResponses responses) throws PipelineException {
-            Values values = new Values(tuple.getStringByField(KEY_FIELD), responses, pullContext(tuple));
+        public void sendResponse(String key, FlowResponses responses) throws PipelineException {
+            Values values = new Values(key, responses, pullContext(tuple));
             emitResponseToHub(tuple, values);
         }
     }

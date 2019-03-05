@@ -52,13 +52,14 @@ public class FlowRemoveCommand extends FlowCommand {
     private final Long meterId;
     private final DeleteRulesCriteria criteria;
 
-    public FlowRemoveCommand(@JsonProperty("flowid") String flowId,
+    public FlowRemoveCommand(@JsonProperty("command_id") String commandId,
+                             @JsonProperty("flowid") String flowId,
                              @JsonProperty("message_context") MessageContext messageContext,
                              @JsonProperty("cookie") Long cookie,
                              @JsonProperty("switch_id") SwitchId switchId,
                              @JsonProperty("meter_id") Long meterId,
                              @JsonProperty("criteria") DeleteRulesCriteria criteria) {
-        super(flowId, messageContext, cookie, switchId);
+        super(commandId, flowId, messageContext, cookie, switchId);
         this.meterId = meterId;
         this.criteria = criteria;
     }
@@ -76,7 +77,13 @@ public class FlowRemoveCommand extends FlowCommand {
 
     @Override
     protected FloodlightResponse buildResponse() {
-        return new FlowResponse(true, messageContext, flowId, switchId);
+        return FlowResponse.builder()
+                .commandId(commandId)
+                .flowId(flowId)
+                .messageContext(messageContext)
+                .success(true)
+                .switchId(switchId)
+                .build();
     }
 
     @Override

@@ -13,15 +13,31 @@
  *   limitations under the License.
  */
 
-package org.openkilda.wfm.topology.flowhs.service;
+package org.openkilda.wfm.topology.flowhs.bolts;
 
 import org.openkilda.floodlight.flow.request.FlowRequest;
-import org.openkilda.wfm.error.PipelineException;
-import org.openkilda.wfm.topology.flowhs.model.FlowResponses;
 
-public interface SpeakerCommandCarrier {
+import java.util.List;
 
-    void sendCommand(String key, FlowRequest command) throws PipelineException;
+public interface FlowCreateHubCarrier {
+    /**
+     * Sends commands to speaker.
+     * @param commands list of commands.
+     */
+    void sendInstallCommands(List<? extends FlowRequest> commands);
 
-    void sendResponse(String key, FlowResponses response) throws PipelineException;
+    /**
+     * Sends deletion/installation commands to speaker in order to be revert changes.
+     */
+    void sendClearUpCommands();
+
+    /**
+     * Loads rules from switches.
+     */
+    void dumpRules();
+
+    /**
+     * Sends response to northbound component.
+     */
+    void sendNorthboundResponse();
 }

@@ -38,9 +38,10 @@ public class FlowErrorResponse extends FlowResponse {
     public FlowErrorResponse(@JsonProperty("success") boolean success,
                              @JsonProperty("error") String description,
                              @JsonProperty("command_context") MessageContext messageContext,
+                             @JsonProperty("command_id") String commandId,
                              @JsonProperty(FLOW_ID) String flowId,
                              @JsonProperty("switch_id") SwitchId switchId) {
-        super(success, messageContext, flowId, switchId);
+        super(success, messageContext, commandId, flowId, switchId);
 
         this.description = description;
     }
