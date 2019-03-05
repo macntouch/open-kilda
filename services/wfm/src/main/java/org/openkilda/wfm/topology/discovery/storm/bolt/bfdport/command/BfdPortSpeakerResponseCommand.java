@@ -17,8 +17,7 @@ package org.openkilda.wfm.topology.discovery.storm.bolt.bfdport.command;
 
 import org.openkilda.messaging.floodlight.response.BfdSessionResponse;
 import org.openkilda.wfm.topology.discovery.model.Endpoint;
-import org.openkilda.wfm.topology.discovery.service.DiscoveryBfdPortService;
-import org.openkilda.wfm.topology.discovery.service.IBfdPortCarrier;
+import org.openkilda.wfm.topology.discovery.storm.bolt.bfdport.BfdPortHandler;
 
 public class BfdPortSpeakerResponseCommand extends BfdPortCommand {
     private final BfdSessionResponse response;
@@ -29,7 +28,7 @@ public class BfdPortSpeakerResponseCommand extends BfdPortCommand {
     }
 
     @Override
-    public void apply(DiscoveryBfdPortService service, IBfdPortCarrier carrier) {
-        service.speakerReponse(carrier, getEndpoint(), response);
+    public void apply(BfdPortHandler handler) {
+        handler.processSpeakerResponse(getEndpoint(), response);
     }
 }

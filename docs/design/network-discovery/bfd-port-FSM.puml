@@ -8,13 +8,12 @@ Internal signals
 Input signals
 * port-up
 * port-down
-* bisl-bfd-enable [ISL-FSM]
-* bisl-bfd-disable [ISL-FSM]
-* FL-ok
-* FL-fail
-* FL-timeout
-* isl-move [ISL-FSM]
-
+* bisl-bfd-enable (ISL-FSM)
+* bisl-bfd-disable (ISL-FSM)
+* FL-ok (worker)
+* FL-fail (worker)
+* FL-timeout (worker)
+* isl-move (ISL-FSM)
 
 Output signals
 * bfd-up
@@ -27,7 +26,7 @@ title BFD port FSM
 [*] --> INIT
 
 state initChoice <<choice>>
-INIT --> initChoice : history
+INIT --> initChoice : history / load persistence-data
 
 initChoice --> IDLE : [BFD-discriminator is empty]
 initChoice --> CLEANING : [BFD-discriminator is set]

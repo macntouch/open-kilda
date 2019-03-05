@@ -18,5 +18,5 @@ package org.openkilda.wfm.topology.discovery.service;
 import org.openkilda.messaging.model.NoviBfdSession;
 
 public interface IBfdPortCarrier {
-    void setupBfdSession(String requestKey, NoviBfdSession bfdSession);
+    void setupBfdSession(NoviBfdSession bfdSession);
 }

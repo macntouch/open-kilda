@@ -16,8 +16,7 @@
 package org.openkilda.wfm.topology.discovery.storm.bolt.bfdport.command;
 
 import org.openkilda.wfm.topology.discovery.model.Endpoint;
-import org.openkilda.wfm.topology.discovery.service.DiscoveryBfdPortService;
-import org.openkilda.wfm.topology.discovery.service.IBfdPortCarrier;
+import org.openkilda.wfm.topology.discovery.storm.bolt.bfdport.BfdPortHandler;
 
 public class BfdPortSpeakerTimeoutCommand extends BfdPortCommand {
     public BfdPortSpeakerTimeoutCommand(Endpoint endpoint) {
@@ -25,7 +24,7 @@ public class BfdPortSpeakerTimeoutCommand extends BfdPortCommand {
     }
 
     @Override
-    public void apply(DiscoveryBfdPortService service, IBfdPortCarrier carrier) {
-        service.speakerTimeout(carrier, getEndpoint());
+    public void apply(BfdPortHandler handler) {
+        handler.processSpeakerTimeout(getEndpoint());
     }
 }

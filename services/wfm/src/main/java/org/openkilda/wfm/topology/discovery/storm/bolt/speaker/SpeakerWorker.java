@@ -45,6 +45,9 @@ public class SpeakerWorker extends WorkerBolt {
 
     @Override
     protected void onHubRequest(Tuple input) throws PipelineException {
+        // At this moment only one bolt(BfdPortHandler) can write into this worker so can rely on routing performed
+        // in our superclass. Once this situation changed we will need to make our own request routing or extend
+        // routing in superclass.
         handleCommand(input, BfdPortHandler.FIELD_ID_COMMAND);
     }
 
@@ -58,28 +61,22 @@ public class SpeakerWorker extends WorkerBolt {
         // TODO
     }
 
-    // -- HUB --> speaker --
-    public void setupBfdSession(String key, NoviBfdSession bfdSession) {
-        SetupBfdSession payload = new SetupBfdSession(bfdSession);
-        speakerRequest(key, payload);
-    }
+    // -- carrier implementation --
 
     public void removeBfdSession(String key, NoviBfdSession bfdSession) {
         RemoveBfdSession payload = new RemoveBfdSession(bfdSession);
-        speakerRequest(key, payload);
+        emitSpeakerRequest(key, payload);
     }
 
-    // -- speaker --> HUB --
+    // -- commands processing --
 
-    public void bfdSessionResponse(String key, BfdSessionResponse response) {
+    public void processBfdSetupRequest(String key, NoviBfdSession bfdSession) {
+        SetupBfdSession payload = new SetupBfdSession(bfdSession);
+        emitSpeakerRequest(key, payload);
+    }
+
+    public void processBfdSetupResponse(String key, BfdSessionResponse response) {
         // TODO
-    }
-
-    // -- private/service methods --
-
-    private void handleCommand(Tuple input, String field) throws PipelineException {
-        SpeakerWorkerCommand command = pullValue(input, field, SpeakerWorkerCommand.class);
-        command.apply(this);
     }
 
     // -- setup --
@@ -89,7 +86,14 @@ public class SpeakerWorker extends WorkerBolt {
         streamManager.declare(STREAM_FIELDS);
     }
 
-    public void speakerRequest(String key, CommandData payload) {
+    // -- private/service methods --
+
+    private void handleCommand(Tuple input, String field) throws PipelineException {
+        SpeakerWorkerCommand command = pullValue(input, field, SpeakerWorkerCommand.class);
+        command.apply(this);
+    }
+
+    public void emitSpeakerRequest(String key, CommandData payload) {
         emit(getCurrentTuple(), makeSpeakerTuple(key, payload));
     }
 

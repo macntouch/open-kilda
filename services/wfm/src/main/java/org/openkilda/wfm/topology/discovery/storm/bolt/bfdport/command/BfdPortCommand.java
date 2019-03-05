@@ -16,13 +16,12 @@
 package org.openkilda.wfm.topology.discovery.storm.bolt.bfdport.command;
 
 import org.openkilda.wfm.topology.discovery.model.Endpoint;
-import org.openkilda.wfm.topology.discovery.service.DiscoveryBfdPortService;
-import org.openkilda.wfm.topology.discovery.service.IBfdPortCarrier;
-import org.openkilda.wfm.topology.discovery.storm.ICommand;
+import org.openkilda.wfm.topology.discovery.storm.IHandlerCommand;
+import org.openkilda.wfm.topology.discovery.storm.bolt.bfdport.BfdPortHandler;
 
 import lombok.Getter;
 
-public abstract class BfdPortCommand implements ICommand<DiscoveryBfdPortService, IBfdPortCarrier> {
+public abstract class BfdPortCommand implements IHandlerCommand<BfdPortHandler> {
     @Getter
     private final Endpoint endpoint;
 

@@ -23,12 +23,13 @@ import org.openkilda.model.SwitchId;
 import org.openkilda.persistence.ConstraintViolationException;
 import org.openkilda.persistence.PersistenceManager;
 import org.openkilda.persistence.repositories.BfdPortRepository;
+import org.openkilda.persistence.repositories.RepositoryFactory;
 import org.openkilda.persistence.repositories.SwitchRepository;
-import org.openkilda.wfm.share.hubandspoke.IKeyFactory;
 import org.openkilda.wfm.share.utils.FsmExecutor;
 import org.openkilda.wfm.topology.discovery.error.SwitchReferenceLookupException;
 import org.openkilda.wfm.topology.discovery.model.Endpoint;
 import org.openkilda.wfm.topology.discovery.model.IslReference;
+import org.openkilda.wfm.topology.discovery.model.LinkStatus;
 import org.openkilda.wfm.topology.discovery.model.facts.BfdPortFacts;
 import org.openkilda.wfm.topology.discovery.service.IBfdPortCarrier;
 
@@ -53,13 +54,15 @@ public final class BfdPortFsm extends
     private static int bfdPollInterval = 350;  // TODO: use config option
     private static short bfdFailCycleLimit = 3;  // TODO: use config option
 
-    private final PersistenceManager persistenceManager;
-    private final BfdPortFacts portFacts;
+    private final SwitchRepository switchRepository;
+    private final BfdPortRepository bfdPortRepository;
 
     @Getter
     private final Endpoint physicalEndpoint;
     @Getter
     private final Endpoint logicalEndpoint;
+
+    private LinkStatus linkStatus;
 
     private Integer discriminator = null;
     private boolean upStatus = false;
@@ -87,7 +90,7 @@ public final class BfdPortFsm extends
 
         // IDLE
         builder.transition()
-                .from(BfdPortFsmState.INIT).to(BfdPortFsmState.INSTALLING).on(BfdPortFsmEvent.BI_ISL_UP);
+                .from(BfdPortFsmState.INIT).to(BfdPortFsmState.INSTALLING).on(BfdPortFsmEvent.ENABLE);
         builder.transition()
                 .from(BfdPortFsmState.INIT).to(BfdPortFsmState.FAIL).on(BfdPortFsmEvent.PORT_UP);
 
@@ -137,6 +140,8 @@ public final class BfdPortFsm extends
                 .from(BfdPortFsmState.UP).to(BfdPortFsmState.DOWN).on(BfdPortFsmEvent.PORT_DOWN);
         builder.transition()
                 .from(BfdPortFsmState.UP).to(BfdPortFsmState.CLEANING).on(BfdPortFsmEvent.BI_ISL_MOVE);
+        builder.transition()
+                .from(BfdPortFsmState.UP).to(BfdPortFsmState.STOP).on(BfdPortFsmEvent.DISABLE);
         builder.onEntry(BfdPortFsmState.UP)
                 .callMethod("upEnter");
 
@@ -151,6 +156,12 @@ public final class BfdPortFsm extends
         // FAIL
         builder.transition()
                 .from(BfdPortFsmState.FAIL).to(BfdPortFsmState.IDLE).on(BfdPortFsmEvent.PORT_DOWN);
+
+        // STOP
+        builder.onEntry(BfdPortFsmState.STOP)
+                .callMethod("stopEnter");
+
+        builder.defineFinalState(BfdPortFsmState.STOP);
     }
 
     public static FsmExecutor<BfdPortFsm, BfdPortFsmState, BfdPortFsmEvent, BfdPortFsmContext> makeExecutor() {
@@ -162,17 +173,21 @@ public final class BfdPortFsm extends
     }
 
     public BfdPortFsm(PersistenceManager persistenceManager, BfdPortFacts portFacts) {
-        this.persistenceManager = persistenceManager;
-        this.portFacts = portFacts;
+        RepositoryFactory repositoryFactory = persistenceManager.getRepositoryFactory();
+        this.switchRepository = repositoryFactory.createSwitchRepository();
+        this.bfdPortRepository = repositoryFactory.createBfdPortRepository();
+
         this.logicalEndpoint = portFacts.getEndpoint();
         this.physicalEndpoint = Endpoint.of(logicalEndpoint.getDatapath(), portFacts.getPhysicalPortNumber());
+        this.linkStatus = portFacts.getLinkStatus();
     }
 
     // -- FSM actions --
 
     protected void consumeHistory(BfdPortFsmState from, BfdPortFsmState to, BfdPortFsmEvent event,
-                                BfdPortFsmContext context) {
-        this.discriminator = context.getDiscriminator();
+                                  BfdPortFsmContext context) {
+        Optional<BfdPort> port = loadBfdPort();
+        port.ifPresent(bfdPort -> discriminator = bfdPort.getDiscriminator());
     }
 
     protected void handleInitChoice(BfdPortFsmState from, BfdPortFsmState to, BfdPortFsmEvent event,
@@ -188,7 +203,7 @@ public final class BfdPortFsm extends
                                  BfdPortFsmContext context) {
         allocateDiscriminator();
 
-        Endpoint remoteEndpoint = locateRemoteEndpoint(context.getIslReference());
+        Endpoint remoteEndpoint = context.getIslReference().getOpposite(getPhysicalEndpoint());
         try {
             SwitchReference localSwitchReference = makeSwitchReference(physicalEndpoint.getDatapath());
             SwitchReference remoteSwitchReference = makeSwitchReference(remoteEndpoint.getDatapath());
@@ -204,8 +219,7 @@ public final class BfdPortFsm extends
                     .multiplier(bfdFailCycleLimit)
                     .keepOverDisconnect(true)
                     .build();
-            String requestKey = context.getRequestKeyFactory().next();
-            context.getOutput().setupBfdSession(requestKey, bfdSession);
+            context.getOutput().setupBfdSession(bfdSession);
         } catch (SwitchReferenceLookupException e) {
             log.error("{}", e.getMessage());
             fire(BfdPortFsmEvent.FAIL, context);
@@ -214,10 +228,8 @@ public final class BfdPortFsm extends
 
     protected void releaseResources(BfdPortFsmState from, BfdPortFsmState to, BfdPortFsmEvent event,
                                   BfdPortFsmContext context) {
-        BfdPortRepository repository = persistenceManager.getRepositoryFactory()
-                .createBfdPortRepository();
-        repository.findBySwitchIdAndPort(logicalEndpoint.getDatapath(), logicalEndpoint.getPortNumber())
-                .ifPresent(repository::delete);
+        bfdPortRepository.findBySwitchIdAndPort(logicalEndpoint.getDatapath(), logicalEndpoint.getPortNumber())
+                .ifPresent(bfdPortRepository::delete);
         discriminator = null;
     }
 
@@ -266,15 +278,15 @@ public final class BfdPortFsm extends
         upStatus = false;
     }
 
+    protected void stopEnter(BfdPortFsmState from, BfdPortFsmState to, BfdPortFsmEvent event,
+                             BfdPortFsmContext context) {
+        // TODO
+    }
+
     // -- private/service methods --
 
     private void allocateDiscriminator() {
-
-        BfdPortRepository bfdPortRepository = persistenceManager.getRepositoryFactory()
-                .createBfdPortRepository();
-
-        Optional<BfdPort> foundPort = bfdPortRepository.findBySwitchIdAndPort(logicalEndpoint.getDatapath(),
-                logicalEndpoint.getPortNumber());
+        Optional<BfdPort> foundPort = loadBfdPort();
 
         if (foundPort.isPresent()) {
             this.discriminator = foundPort.get().getDiscriminator();
@@ -297,25 +309,11 @@ public final class BfdPortFsm extends
         }
     }
 
-    private Endpoint locateRemoteEndpoint(IslReference islReference) {
-        Endpoint remote;
-
-        if (physicalEndpoint.equals(islReference.getSource())) {
-            remote = islReference.getDest();
-        } else if (physicalEndpoint.equals(islReference.getDest())) {
-            remote = islReference.getSource();
-        } else {
-            throw new IllegalArgumentException(String.format(
-                    "Isl reference %s does not refer for physical endpoint %s", islReference, physicalEndpoint));
-        }
-
-        return remote;
+    private Optional<BfdPort> loadBfdPort() {
+        return bfdPortRepository.findBySwitchIdAndPort(logicalEndpoint.getDatapath(), logicalEndpoint.getPortNumber());
     }
 
     private SwitchReference makeSwitchReference(SwitchId datapath) throws SwitchReferenceLookupException {
-        SwitchRepository switchRepository = persistenceManager.getRepositoryFactory()
-                .createSwitchRepository();
-
         Optional<Switch> potentialSw = switchRepository.findById(datapath);
         if (! potentialSw.isPresent()) {
             throw new SwitchReferenceLookupException(datapath, "persistent record is missing");
@@ -338,13 +336,7 @@ public final class BfdPortFsm extends
     public static class BfdPortFsmContext {
         private final IBfdPortCarrier output;
 
-        private IKeyFactory requestKeyFactory;
-
-        private BfdPortFacts portFacts;
-
         private IslReference islReference;
-
-        private Integer discriminator;
 
         public static BfdPortFsmContextBuilder builder(IBfdPortCarrier outputAdapter) {
             return (new BfdPortFsmContextBuilder()).output(outputAdapter);
@@ -355,7 +347,8 @@ public final class BfdPortFsm extends
         NEXT, KILL, FAIL,
 
         HISTORY,
-        BI_ISL_UP, BI_ISL_MOVE,
+        ENABLE, DISABLE,
+        BI_ISL_MOVE,
         PORT_UP, PORT_DOWN,
 
         SPEAKER_SUCCESS, SPEAKER_FAIL, SPEAKER_TIMEOUT,
@@ -376,6 +369,7 @@ public final class BfdPortFsm extends
         CLEANING_CHOICE,
         WAIT_RELEASE,
 
-        FAIL
+        FAIL,
+        STOP
     }
 }

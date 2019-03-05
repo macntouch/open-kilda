@@ -15,13 +15,17 @@
 
 package org.openkilda.wfm.topology.discovery.storm.bolt.bfdport;
 
+import org.openkilda.messaging.floodlight.response.BfdSessionResponse;
 import org.openkilda.messaging.model.NoviBfdSession;
 import org.openkilda.persistence.PersistenceManager;
 import org.openkilda.wfm.AbstractBolt;
-import org.openkilda.wfm.AbstractOutputAdapter;
 import org.openkilda.wfm.error.AbstractException;
 import org.openkilda.wfm.error.PipelineException;
 import org.openkilda.wfm.share.hubandspoke.TaskIdBasedKeyFactory;
+import org.openkilda.wfm.topology.discovery.model.Endpoint;
+import org.openkilda.wfm.topology.discovery.model.IslReference;
+import org.openkilda.wfm.topology.discovery.model.LinkStatus;
+import org.openkilda.wfm.topology.discovery.model.facts.BfdPortFacts;
 import org.openkilda.wfm.topology.discovery.service.DiscoveryBfdPortService;
 import org.openkilda.wfm.topology.discovery.service.IBfdPortCarrier;
 import org.openkilda.wfm.topology.discovery.storm.ComponentId;
@@ -37,7 +41,7 @@ import org.apache.storm.tuple.Fields;
 import org.apache.storm.tuple.Tuple;
 import org.apache.storm.tuple.Values;
 
-public class BfdPortHandler extends AbstractBolt {
+public class BfdPortHandler extends AbstractBolt implements IBfdPortCarrier {
     public static final String BOLT_ID = ComponentId.BFD_PORT_HANDLER.toString();
 
     public static final String FIELD_ID_COMMAND_KEY = MessageTranslator.KEY_FIELD;
@@ -77,13 +81,56 @@ public class BfdPortHandler extends AbstractBolt {
 
     private void handleCommand(Tuple input, String fieldName) throws PipelineException {
         BfdPortCommand command = pullValue(input, fieldName, BfdPortCommand.class);
-        command.apply(service, new OutputAdapter(this, input));
+        command.apply(this);
     }
+
+    // -- carrier implementation --
+
+    @Override
+    public void setupBfdSession(String requestKey, NoviBfdSession bfdSession) {
+        emit(STREAM_SPEAKER_ID, getCurrentTuple(), makeSpeakerTuple(new SpeakerBfdSessionSetupCommand(requestKey, bfdSession)));
+    }
+
+    // -- commands processing --
+
+    public void processSetup(BfdPortFacts portFacts) {
+        service.setup(portFacts);
+    }
+
+    public void processRemove(Endpoint endpoint) {
+        service.remove(endpoint);
+    }
+
+    public void processEnable(Endpoint endpoint, IslReference reference) {
+        service.enable(endpoint, reference);
+    }
+
+    public void processDisable(Endpoint endpoint, IslReference reference) {
+        service.disable(endpoint, reference);
+    }
+
+    public void processLinkStatusUpdate(Endpoint endpoint, LinkStatus status) {
+        service.updateLinkStatus(endpoint, status);
+    }
+
+    public void processOnlineModeUpdate(Endpoint endpoint, boolean mode) {
+        service.updateOnlineMode(endpoint, mode);
+    }
+
+    public void processSpeakerResponse(Endpoint endpoint, BfdSessionResponse response) {
+        service.speakerResponse(endpoint, response);
+    }
+
+    public void processSpeakerTimeout(Endpoint endpoint) {
+        service.speakerTimeout(endpoint);
+    }
+
+    // -- setup --
 
     @Override
     protected void init() {
         TaskIdBasedKeyFactory keyFactory = new TaskIdBasedKeyFactory(getTaskId());
-        service = new DiscoveryBfdPortService(persistenceManager, keyFactory);
+        service = new DiscoveryBfdPortService(this, persistenceManager, keyFactory);
     }
 
     @Override
@@ -91,18 +138,9 @@ public class BfdPortHandler extends AbstractBolt {
         streamManager.declareStream(STREAM_SPEAKER_ID, STREAM_SPEAKER_FIELDS);
     }
 
-    private static class OutputAdapter extends AbstractOutputAdapter implements IBfdPortCarrier {
-        public OutputAdapter(AbstractBolt owner, Tuple tuple) {
-            super(owner, tuple);
-        }
+    // -- private/service methods --
 
-        @Override
-        public void setupBfdSession(String requestKey, NoviBfdSession bfdSession) {
-            emit(STREAM_SPEAKER_ID, makeSpeakerTuple(new SpeakerBfdSessionSetupCommand(requestKey, bfdSession)));
-        }
-
-        private Values makeSpeakerTuple(SpeakerWorkerCommand command) {
-            return new Values(command.getKey(), command, getContext());
-        }
+    private Values makeSpeakerTuple(SpeakerWorkerCommand command) {
+        return new Values(command.getKey(), command, getCommandContext());
     }
 }

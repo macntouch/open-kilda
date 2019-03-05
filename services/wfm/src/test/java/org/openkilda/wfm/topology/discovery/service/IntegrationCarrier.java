@@ -60,12 +60,12 @@ public class IntegrationCarrier implements ISwitchCarrier, IPortCarrier, IBfdPor
 
     @Override
     public void bfdEnableRequest(Endpoint physicalEndpoint, IslReference reference) {
-        bfdPortService.handleEnableRequest(bfdPortCarrier, physicalEndpoint, reference);
+        bfdPortService.enable(bfdPortCarrier, physicalEndpoint, reference);
     }
 
     @Override
     public void bfdDisableRequest(Endpoint physicalEndpoint, IslReference reference) {
-        bfdPortService.handleDisableRequest(bfdPortCarrier, physicalEndpoint, reference);
+        bfdPortService.disable(bfdPortCarrier, physicalEndpoint, reference);
     }
 
     @Override
